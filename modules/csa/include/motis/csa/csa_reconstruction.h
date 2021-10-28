@@ -18,22 +18,6 @@
 
 namespace motis::csa {
 
-struct journey_pointer {
-  journey_pointer() = default;
-  journey_pointer(csa_connection const* enter_con,
-                  csa_connection const* exit_con, footpath const* footpath)
-      : enter_con_(enter_con), exit_con_(exit_con), footpath_(footpath) {}
-
-  bool valid() const {
-    return enter_con_ != nullptr && exit_con_ != nullptr &&
-           footpath_ != nullptr;
-  }
-
-  csa_connection const* enter_con_{nullptr};
-  csa_connection const* exit_con_{nullptr};
-  footpath const* footpath_{nullptr};
-};
-
 template <search_dir Dir, typename ArrivalTimes, typename TripReachable>
 struct csa_reconstruction {
   using arrival_time_t = std::remove_reference_t<
