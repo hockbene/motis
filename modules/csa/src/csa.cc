@@ -37,10 +37,13 @@ void csa::init(motis::module::registry& reg) {
 #endif
   });
   reg.register_op("/csa/cpu", [&](msg_ptr const& msg) {
-    return route(msg, implementation_type::CPU);
+    return route(msg, implementation_type::CPU, algorithm_type::DEFAULT);
   });
   reg.register_op("/csa/profile/cpu", [&](msg_ptr const& msg) {
-    return route(msg, implementation_type::CPU, true);
+    return route(msg, implementation_type::CPU, algorithm_type::PROFILE);
+  });
+  reg.register_op("/csa/meat", [&](msg_ptr const& msg) {
+    return route(msg, implementation_type::CPU, algorithm_type::MEAT);
   });
 
 #ifdef MOTIS_AVX
@@ -60,12 +63,12 @@ csa_timetable const* csa::get_timetable() const { return timetable_.get(); }
 
 motis::module::msg_ptr csa::route(motis::module::msg_ptr const& msg,
                                   implementation_type impl_type,
-                                  bool use_profile_search) const {
+                                  algorithm_type algo_type) const {
   auto const req = motis_content(RoutingRequest, msg);
   auto const& sched = get_sched();
   auto const response =
       run_csa_search(sched, *timetable_, csa_query(sched, req),
-                     req->search_type(), impl_type, use_profile_search);
+                     req->search_type(), impl_type, algo_type);
   message_creator mc;
   mc.create_and_finish(
       MsgContent_RoutingResponse,

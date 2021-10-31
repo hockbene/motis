@@ -4,6 +4,7 @@
 
 #include "motis/core/schedule/schedule.h"
 
+#include "motis/csa/csa_algorithm_type.h"
 #include "motis/csa/csa_implementation_type.h"
 #include "motis/csa/csa_journey.h"
 #include "motis/csa/csa_query.h"
@@ -16,6 +17,6 @@ namespace motis::csa {
 
 response run_csa_search(schedule const&, csa_timetable const&, csa_query const&,
                         motis::routing::SearchType, implementation_type,
-                        bool use_profile_search);
+                        algorithm_type);
 
 }  // namespace motis::csa

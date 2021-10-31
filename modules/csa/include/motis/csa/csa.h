@@ -2,6 +2,7 @@
 
 #include "motis/module/module.h"
 
+#include "motis/csa/csa_algorithm_type.h"
 #include "motis/csa/csa_implementation_type.h"
 
 #ifdef MOTIS_CUDA
@@ -26,9 +27,9 @@ struct csa : public motis::module::module {
 
   csa_timetable const* get_timetable() const;
 
-  motis::module::msg_ptr route(motis::module::msg_ptr const&,
-                               implementation_type,
-                               bool use_profile_search = false) const;
+  motis::module::msg_ptr route(
+      motis::module::msg_ptr const&, implementation_type,
+      algorithm_type algo_type = algorithm_type::DEFAULT) const;
 
 #ifdef MOTIS_CUDA
   bool bridge_zero_duration_connections_{true};

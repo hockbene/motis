@@ -10,9 +10,11 @@
 #ifdef MOTIS_CUDA
 #include "motis/csa/gpu/gpu_search.h"
 #endif
+#include "motis/csa/cpu/csa_meat_search.h"
 #include "motis/csa/cpu/csa_profile_search_default_cpu.h"
 #include "motis/csa/cpu/csa_search_default_cpu.h"
 #include "motis/csa/error.h"
+#include "motis/csa/meat.h"
 #include "motis/csa/pareto_set.h"
 #include "motis/csa/pretrip.h"
 
@@ -88,20 +90,33 @@ response run_profile_search(schedule const& sched, csa_timetable const& tt,
   }
 }
 
+template <typename CSAMeatSearch>
+response run_meat_search(schedule const& sched, csa_timetable const& tt,
+                         csa_query const& q) {
+  csa_statistics stats;
+  return meat<CSAMeatSearch>(sched, tt, q, stats).search();
+}
+
 template <search_dir Dir>
 response dispatch_search_type(schedule const& sched, csa_timetable const& tt,
                               csa_query const& q, SearchType const search_type,
                               implementation_type const impl_type,
-                              bool use_profile_search) {
+                              algorithm_type algo_type) {
   switch (impl_type) {
     case implementation_type::CPU:
       switch (search_type) {
         case SearchType_Default:
         case SearchType_Accessibility:
-          return use_profile_search
-                     ? run_profile_search<cpu::csa_profile_search<Dir>,
-                                          cpu::csa_search<Dir>>(sched, tt, q)
-                     : run_search<cpu::csa_search<Dir>>(sched, tt, q);
+          switch (algo_type) {
+            case algorithm_type::DEFAULT:
+              return run_search<cpu::csa_search<Dir>>(sched, tt, q);
+            case algorithm_type::PROFILE:
+              return run_profile_search<cpu::csa_profile_search<Dir>,
+                                        cpu::csa_search<Dir>>(sched, tt, q);
+            case algorithm_type::MEAT:
+              return run_meat_search<cpu::csa_meat_search<Dir>>(sched, tt, q);
+              // TODO add default case with error
+          }
         default: throw std::system_error(error::search_type_not_supported);
       }
 
@@ -148,7 +163,7 @@ response dispatch_search_type(schedule const& sched, csa_timetable const& tt,
 response run_csa_search(schedule const& sched, csa_timetable const& tt,
                         csa_query const& q, SearchType const search_type,
                         implementation_type const impl_type,
-                        bool use_profile_search) {
+                        algorithm_type const algo_type) {
   if ((tt.fwd_connections_.empty() && q.dir_ == search_dir::FWD) ||
       (tt.bwd_connections_.empty() && q.dir_ == search_dir::BWD)) {
     response r;
@@ -157,10 +172,10 @@ response run_csa_search(schedule const& sched, csa_timetable const& tt,
   }
 
   return q.dir_ == search_dir::FWD
-             ? dispatch_search_type<search_dir::FWD>(
-                   sched, tt, q, search_type, impl_type, use_profile_search)
-             : dispatch_search_type<search_dir::BWD>(
-                   sched, tt, q, search_type, impl_type, use_profile_search);
+             ? dispatch_search_type<search_dir::FWD>(sched, tt, q, search_type,
+                                                     impl_type, algo_type)
+             : dispatch_search_type<search_dir::BWD>(sched, tt, q, search_type,
+                                                     impl_type, algo_type);
 }
 
 }  // namespace motis::csa
