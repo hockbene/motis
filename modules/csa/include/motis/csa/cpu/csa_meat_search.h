@@ -242,7 +242,7 @@ struct csa_meat_search {
       return;
     }
 
-    // TODO ist das richtig?
+    // TODO(root) ist das richtig?
     if (std::any_of(it, s_[station_id].end(), [&](auto other_pair) {
           return !dominates(profile_pair, other_pair);
         })) {
@@ -253,7 +253,7 @@ struct csa_meat_search {
     // profile_pair);
     it = s_[station_id].emplace(s_[station_id].begin(), profile_pair);
 
-    // TODO was wenn .begin() entfernt werden muss?
+    // TODO(root) was wenn .begin() entfernt werden muss?
     /*
     while (it != s_[station_id].begin()) {
       if (dominates((*it), profile_pair)) {

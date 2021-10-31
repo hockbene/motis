@@ -84,7 +84,7 @@ struct csa_journey {
     }
     return out << "}";
   }
-  // TODO sometimes edges_ are empty, throws an exception
+  // TODO(root): sometimes edges_ are empty, throws an exception
   time journey_begin() const {
     return edges_.empty() ? 0 : edges_.front().departure_;
   }

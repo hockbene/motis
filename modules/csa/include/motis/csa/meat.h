@@ -39,7 +39,7 @@ struct meat {
   time static constexpr MAX_DELAY = 30;
   bool static constexpr FORCE_MAX_DELAY = true;
   double static constexpr ALPHA = 1.3;
-  // TODO Support für Relaxed Dominance
+  // TODO(root) Support für Relaxed Dominance
   // relaxation tuning parameter beta
   // double static constexpr BETA = 0.0;
 
@@ -72,7 +72,6 @@ struct meat {
     // (4) Run a one-to-all Connection Scan from s restricted to the connections
     // from c_first to c_last
     //      to determine all eat(s, τ_s , ·).
-    // TODO
 
     time tau_s = search_interval_.begin_;
     time esat_time =
@@ -114,7 +113,7 @@ struct meat {
     // (6) Finally, run Phase 2 of the unbounded MEAT algorithm; i.e., extract
     // the (s, τ s , t )-decision graph.
 
-    // TODO Graph Extraction auslagern
+    // TODO(root) Graph Extraction auslagern
     std::unordered_map<station_id, std::vector<csa_connection>> graph_stations;
     std::vector<std::pair<csa_connection, csa_connection>> legs;
 
@@ -193,10 +192,10 @@ struct meat {
 
     // if (!(graph_stations.empty() || legs.empty())) {
     //  Generate .dot representation of graph
-    //  TODO Support für kompakte Darstellung
+    //  TODO(root) Support für kompakte Darstellung
     std::string output_string = generate_dot_graph(graph_stations, legs);
     std::ofstream graph_file;
-    // TODO Query ID in den Dateinamen einbringen
+    // TODO(root) Query ID in den Dateinamen einbringen
     std::string unique_id = std::to_string(q_.meta_starts_.at(0)) + "-" +
                             std::to_string(q_.meta_dests_.at(0)) + "-" +
                             std::to_string(search_interval_.begin_) + "-" +
@@ -207,7 +206,7 @@ struct meat {
     graph_file << output_string;
     graph_file.close();
 
-    // TODO Vielleicht schon .png generieren?
+    // TODO(root) Vielleicht schon .png generieren?
     // Aufruf der Kommandozeile mit
     // 'dot -Tpng -o responses-csa_meat.png responses-csa_meat.dot'
     //}
@@ -316,7 +315,7 @@ struct meat {
       }
       for (auto timestamp : connection_times) {
         station_str += "|<" + std::to_string(timestamp) + ">";
-        // TODO motis_time in lesbare Uhrzeit umwandeln (z.B. "%H:%M")
+        // TODO(root) motis_time in lesbare Uhrzeit umwandeln (z.B. "%H:%M")
         station_str += std::to_string(timestamp);
       }
       station_str += "\"];\n";
@@ -333,7 +332,7 @@ struct meat {
       leg_str += ":";
       leg_str += std::to_string(leg.second.arrival_);
       // leg_str += ":w";
-      //  TODO Sinnvolle Angabe des Trips (z.B. ICE 512) statt interner Trip-Id
+      //  TODO(root) Sinnvolle Angabe des Trips (z.B. ICE 512) statt interner Trip-Id
       leg_str += " [ label=\"" + std::to_string(leg.first.trip_) + "\" ];\n";
       output_string += leg_str;
     }
@@ -451,15 +450,15 @@ private:
   csa_query const& query() const { return q_; }
   csa_statistics& stats() const { return stats_; }
 
+  schedule const& sched_;
+  csa_timetable const& tt_;
+  csa_query const& q_;
+  csa_statistics& stats_;
   motis::time schedule_begin_, schedule_end_;
   interval search_interval_{map_to_interval(q_.search_interval_.begin_),
                             map_to_interval(q_.search_interval_.end_)};
   pareto_set<csa_journey, decltype(&dominates)> results_{
       make_pareto_set<csa_journey>(&dominates)};
-  schedule const& sched_;
-  csa_timetable const& tt_;
-  csa_query const& q_;
-  csa_statistics& stats_;
 };
 
 }  // namespace motis::csa

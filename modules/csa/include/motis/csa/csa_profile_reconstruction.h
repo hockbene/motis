@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_map>
+
 #include "utl/pipes.h"
 #include "utl/verify.h"
 
@@ -18,9 +20,9 @@ struct csa_profile_reconstruction {
   using arrival_time_t = std::remove_reference_t<
       std::remove_cv_t<decltype(std::declval<ArrivalTimes>()[0])>>;
 
-  static auto INVALID = Dir == search_dir::FWD
-                            ? std::numeric_limits<arrival_time_t>::max()
-                            : std::numeric_limits<arrival_time_t>::min();
+  static constexpr auto INVALID =
+      Dir == search_dir::FWD ? std::numeric_limits<arrival_time_t>::max()
+                             : std::numeric_limits<arrival_time_t>::min();
 
   csa_profile_reconstruction(csa_timetable const& tt,
                              ArrivalTimes const& arrival_time,
@@ -41,9 +43,9 @@ struct csa_profile_reconstruction {
     return targets_.find(station.id_) != targets_.end();
   }
 
-  // TODO BWD
-  // TODO geht das nicht effizienter? Im Worst case wird das Profil 2x komplett
-  // gescannt
+  // TODO(root) BWD
+  // TODO(root) geht das nicht effizienter? Im Worst case wird das Profil 2x
+  // komplett gescannt
   std::pair<time, std::array<time, MAX_TRANSFERS + 1>>
   find_earliest_profile_pair(csa_station const& station, int transfers,
                              time const tau_s) {
@@ -70,7 +72,7 @@ struct csa_profile_reconstruction {
     // 1>::make_array(INVALID));
     return {};
   }
-  // TODO BWD
+  // TODO(root) BWD
   void extract_journey(csa_journey& journey) {
     if (journey.is_reconstructed()) {
       return;
@@ -80,7 +82,6 @@ struct csa_profile_reconstruction {
     auto tau_s = journey.start_time_;
     // Optimiere (d, a) um für gegebene Ankunftszeit und Transfers die beste
     // Ankunftszeit zu finden
-    // TODO: Maybe in get_results verschieben
     auto const optimal_profile =
         find_earliest_profile_pair(*start, transfers, tau_s);
 
@@ -193,7 +194,7 @@ struct csa_profile_reconstruction {
                                  "a matching final footpath to add";
   }
 
-  // TODO BWD
+  // TODO(root) BWD
   journey_pointer get_journey_pointer(csa_station const& station, int transfers,
                                       time tau_s) {
     if (Dir == search_dir::FWD) {
@@ -235,7 +236,7 @@ struct csa_profile_reconstruction {
           find_earliest_profile_pair(station, transfers, tau_s);
       std::unordered_map<csa_connection const*, footpath> candidates;
 
-      // TODO: auslagern zu get_enter_candidates
+      // TODO(root) auslagern zu get_enter_candidates?
       for (auto const& fp : station.footpaths_) {
         for (auto const& candidate :
              tt_.stations_[fp.to_station_].outgoing_connections_) {
@@ -245,7 +246,7 @@ struct csa_profile_reconstruction {
         }
       }
 
-      // TODO: Optionally prune candidate set
+      // TODO(root)  Optionally prune candidate set
       for (auto const& candidate : candidates) {
         auto const& enter_con = candidate.first;
         auto const& trip_connections =
@@ -316,8 +317,8 @@ struct csa_profile_reconstruction {
            | utl::remove_if(
                  [this, arrival_time, transfers](csa_connection const* con) {
                    return con->arrival_ != arrival_time ||
-                          // !trip_reachable_[con->trip_][transfers - 1] || TODO
-                          // wird das benötigt?
+                          // !trip_reachable_[con->trip_][transfers - 1] ||
+                          // TODO(root) wird das benötigt?
                           !con->to_out_allowed_;
                  })  //
            | utl::iterable();
@@ -329,18 +330,18 @@ struct csa_profile_reconstruction {
            | utl::remove_if(
                  [this, departure_time, transfers](csa_connection const* con) {
                    return con->departure_ != departure_time ||
-                          // !trip_reachable_[con->trip_][transfers - 1] || TODO
-                          // wird das benötigt?
+                          // !trip_reachable_[con->trip_][transfers - 1] ||
+                          // TODO(root) wird das benötigt?
                           !con->from_in_allowed_;
                  })  //
            | utl::iterable();
   }
 
   csa_timetable const& tt_;
-  Targets const& targets_;
   ArrivalTimes const& arrival_time_;
   FinalFootpaths const& final_footpaths_;
   TripReachable const& trip_reachable_;
+  Targets const& targets_;
 };
 
 }  // namespace motis::csa
