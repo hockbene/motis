@@ -165,7 +165,9 @@ struct pretrip_profile_search {
   void search_in_interval(Results& results, interval const& search_interval,
                           bool const ontrip_at_interval_end) {
     CSAProfileSearch profile_csa{tt_, search_interval, stats_};
-    init_and_run_search(profile_csa, results);
+    CSAOnTripSearch ontrip_csa{tt_, static_cast<time>(search_interval.begin_),
+                               stats_};
+    init_and_run_search(profile_csa, ontrip_csa, results);
 
     if (ontrip_at_interval_end) {
       CSAOnTripSearch ontrip_csa{
@@ -175,11 +177,27 @@ struct pretrip_profile_search {
   }
 
   template <typename Results>
-  void init_and_run_search(CSAProfileSearch& csa, Results& results) {
-    for (auto const& start_idx : q_.meta_dests_) {
-      csa.add_destination(tt_.stations_.at(start_idx), 0);
+  void init_and_run_search(CSAProfileSearch& profile_csa,
+                           CSAOnTripSearch& ontrip_csa, Results& results) {
+    for (auto const& start_idx : q_.meta_starts_) {
+      ontrip_csa.add_start(tt_.stations_.at(start_idx), 0);
+      profile_csa.starts_.insert(start_idx);
     }
-    run_search(csa, results);
+    ontrip_csa.search();
+    bool reachable;
+    for (auto trip = 0; trip < tt_.trip_count_; ++trip) {
+      reachable = false;
+      for (auto i = 0; i < ontrip_csa.trip_reachable_[trip].size(); ++i) {
+        reachable |= ontrip_csa.trip_reachable_[trip][i];
+      }
+      profile_csa.is_trip_reachable_[trip] = reachable;
+    }
+
+    for (auto const& dest_idx : q_.meta_dests_) {
+      profile_csa.add_destination(tt_.stations_.at(dest_idx), 0);
+    }
+
+    run_search(profile_csa, results);
   }
 
   template <typename Results>
@@ -204,8 +222,8 @@ struct pretrip_profile_search {
     stats_.reconstruction_duration_ += MOTIS_TIMING_MS(reconstruction_timing);
   }
 
-  template <typename CSASearch, typename Results>
-  void collect_results(CSASearch& csa, Results& results) {
+  template <typename Results>
+  void collect_results(CSAOnTripSearch& csa, Results& results) {
     for (auto const& dest_idx : q_.meta_dests_) {
       for (csa_journey& j : csa.get_results(tt_.stations_.at(dest_idx),
                                             q_.include_equivalent_)) {
@@ -214,6 +232,39 @@ struct pretrip_profile_search {
         }
       }
     }
+  }
+
+  template <typename Results>
+  void collect_results(CSAProfileSearch& csa, Results& results) {
+    for (auto const& start_idx : q_.meta_starts_) {
+      for (csa_journey& j : csa.get_results(tt_.stations_.at(start_idx),
+                                            q_.include_equivalent_)) {
+        if (j.duration() <= MAX_TRAVEL_TIME) {
+          results.push_back(j);
+        }
+      }
+    }
+  }
+
+  template <typename Results>
+  void run_search(CSAProfileSearch& profile_csa, CSAOnTripSearch ontrip_csa,
+                  Results& results) {
+
+    for (auto const& dest_idx : q_.meta_dests_) {
+      profile_csa.add_destination(tt_.stations_.at(dest_idx), 0);
+    }
+
+    MOTIS_START_TIMING(search_timing);
+
+    profile_csa.search();
+    MOTIS_STOP_TIMING(search_timing);
+
+    MOTIS_START_TIMING(reconstruction_timing);
+    collect_results(profile_csa, results);
+    MOTIS_STOP_TIMING(reconstruction_timing);
+
+    stats_.search_duration_ += MOTIS_TIMING_MS(search_timing);
+    stats_.reconstruction_duration_ += MOTIS_TIMING_MS(reconstruction_timing);
   }
 
   schedule const& sched_;
