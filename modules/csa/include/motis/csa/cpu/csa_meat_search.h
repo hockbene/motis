@@ -71,10 +71,6 @@ struct csa_meat_search {
     }
   }
 
-  time max_D_c(const csa_connection& con) {
-    return tt_.stations_[con.to_station_].transfer_time_ + MAX_DELAY;
-  }
-
   time get_tau_1(const csa_connection& con, bool force_max_delay = false) {
     auto tau_1 = d_[con.to_station_];
     if (tau_1 != INVALID) {
@@ -87,6 +83,7 @@ struct csa_meat_search {
   }
 
   time get_tau_2(const csa_connection& con, bool force_max_delay = false) {
+    (void)force_max_delay;
     return t_[con.trip_];
   }
 
@@ -148,7 +145,10 @@ struct csa_meat_search {
   void search(
       bool force_max_delay = false,
       std::function<bool(csa_connection const&)> skip_connection =
-          [](auto const& con) { return false; }) {
+          [](auto const& con) {
+            (void)con;
+            return false;
+          }) {
     auto const& connections =
         Dir == search_dir::FWD ? tt_.fwd_connections_ : tt_.bwd_connections_;
 
@@ -279,16 +279,9 @@ struct csa_meat_search {
     utl::verify_ex(!include_equivalent,
                    std::system_error{error::include_equivalent_not_supported});
 
-    std::vector<csa_journey> journeys;
-    auto const& departure_time = s_[station.id_].begin()->first;
-    auto const& arrival_time = s_[station.id_].begin()->second;
-    csa_meat_reconstruction<Dir, decltype(s_), decltype(t_),
-                            decltype(targets_)>{tt_, s_, t_, targets_}
-        .extract_journey(
-            journeys.emplace_back(Dir, departure_time, arrival_time, 0,
-                                  &station, false),
-            force_max_delay);
-    return journeys;
+    (void)station;
+    (void)force_max_delay;
+    return {};
   }
 
   csa_timetable const& tt_;  // Fahrplan

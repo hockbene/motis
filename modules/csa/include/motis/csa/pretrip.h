@@ -247,12 +247,7 @@ struct pretrip_profile_search {
   }
 
   template <typename Results>
-  void run_search(CSAProfileSearch& profile_csa, CSAOnTripSearch ontrip_csa,
-                  Results& results) {
-
-    for (auto const& dest_idx : q_.meta_dests_) {
-      profile_csa.add_destination(tt_.stations_.at(dest_idx), 0);
-    }
+  void run_search(CSAProfileSearch& profile_csa, Results& results) {
 
     MOTIS_START_TIMING(search_timing);
 

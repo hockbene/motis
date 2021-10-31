@@ -391,8 +391,7 @@ auto const tau_3 = shift((*p_it).second);
     */
   }
 
-  bool is_source_dominated(const std::pair<time, arrival_times>& profile_pair,
-                           const uint32_t station_id) {
+  bool is_source_dominated(const std::pair<time, arrival_times>& profile_pair) {
     for (auto start_idx : starts_) {
       if (dominates_profile(arrival_time_[start_idx].front(), profile_pair)) {
         return true;
@@ -415,7 +414,7 @@ auto const tau_3 = shift((*p_it).second);
                       const uint32_t station_id) {
 
     if (starts_.find(station_id) == starts_.end()) {
-      if (is_source_dominated(profile_pair, station_id)) {
+      if (is_source_dominated(profile_pair)) {
         return;
       }
     }

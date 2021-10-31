@@ -23,30 +23,6 @@
 
 namespace motis::csa {
 
-// TODO esat() und e() geben Zeiten zurück, keine Journey.
-//  Evtl ist gar keine journey reconstruction im ursprünglichen Sinne nötig!
-
-// To solve the α-bounded (s, τ s , t )-MEAT problem, we perform the following
-// steps: (1) Run a binary search on the connection set to determine the
-// earliest
-//      connection c_first departing after τ_s .
-// (2) Run a one-to-one Connection Scan from s to t that assumes all connections
-// c are delayed by
-//      max_D_c to determine esat(s, τ_s, t).
-// (3) Let τ_last = τ_s + α · (esat(s, τ_s , t) − τ_s) and run a second binary
-// search on the
-//      connection set to find the last connection c_last departing before
-//      τ_last .
-// (4) Run a one-to-all Connection Scan from s restricted to the connections
-// from c_first to c_last
-//      to determine all eat(s, τ_s , ·).
-// (5) Run Phase 1 of the unbounded MEAT algorithm scanning the connections from
-// c_last to c_first,
-//      skipping connections c for which c arr_time > τ last or eat(s, τ_s ,
-//      c_dep_stop ) ≤ c dep_time does not hold.
-// (6) Finally, run Phase 2 of the unbounded MEAT algorithm; i.e., extract the
-//      (s, τ s , t )-decision graph.
-
 template <typename CSAMeatSearch>
 struct meat {
   meat(schedule const& sched, csa_timetable const& tt, csa_query const& q,
@@ -55,6 +31,9 @@ struct meat {
         tt_{tt},
         q_{q},
         stats_{stats},
+        schedule_begin_{SCHEDULE_OFFSET_MINUTES},
+        schedule_end_{static_cast<motis::time>(
+            (sched.schedule_end_ - sched.schedule_begin_) / 60)},
         search_interval_{q.search_interval_} {}
 
   time static constexpr MAX_DELAY = 30;
@@ -113,6 +92,7 @@ struct meat {
     // from c_last to c_first,
     //      skipping connections c for which c_arr_time > τ_last or eat(s, τ_s ,
     //      c_dep_stop ) ≤ c_dep_time does not hold.
+    /*
     auto skip_connections = [&](csa_connection const& con) {
       return con.arrival_ > tau_last ||
              std::any_of(q_.meta_starts_.begin(), q_.meta_starts_.end(),
@@ -121,7 +101,8 @@ struct meat {
                                   con.departure_;
                          });
     };
-    // eat_csa.search(false, skip_connections);
+    eat_csa.search(false, skip_connections);
+     */
     MOTIS_STOP_TIMING(search_2_timing);
 
     // arrival time of an optimal safe earliest arrival journey
@@ -147,12 +128,13 @@ struct meat {
 
     for (auto const& start_idx : q_.meta_starts_) {
       auto const departure_time = esat(start_idx, tau_s).first;
-      auto const transfer_time = tt_.stations_[start_idx].transfer_time_;
+      auto const initial_transfer_time =
+          tt_.stations_[start_idx].transfer_time_;
       auto const earliest_connection_ptr = std::find_if(
           tt_.stations_[start_idx].outgoing_connections_.begin(),
           tt_.stations_[start_idx].outgoing_connections_.end(),
           [&](auto const& con) {
-            return con->departure_ == departure_time + transfer_time;
+            return con->departure_ == departure_time + initial_transfer_time;
           });
       if (earliest_connection_ptr ==
           tt_.stations_[start_idx].outgoing_connections_.end()) {
@@ -174,7 +156,7 @@ struct meat {
         legs.emplace_back(enter_con, exit_con);
         if (!is_destination(exit_con.to_station_)) {
           auto const station_profile = esat_csa.s_[exit_con.to_station_];
-          auto const transfer_time =
+          auto const exit_con_transfer_time =
               tt_.stations_[exit_con.to_station_].transfer_time_;
           auto const first_pair = std::lower_bound(
               station_profile.begin(), station_profile.end(), exit_con.arrival_,
@@ -187,8 +169,8 @@ struct meat {
             if (it->first == INVALID_TIME) {
               break;
             }
-            auto const con = get_con_for_dep_time(it->first + transfer_time,
-                                                  exit_con.to_station_);
+            auto const con = get_con_for_dep_time(
+                it->first + exit_con_transfer_time, exit_con.to_station_);
             if (con.departure_ != INVALID_TIME) {
               queue.push(con);
             }
@@ -242,9 +224,9 @@ struct meat {
       std::unordered_map<station_id, std::vector<csa_connection>>&
           graph_stations,
       std::vector<std::pair<csa_connection, csa_connection>>& legs) {
-    int changes = 1;
-    while (changes != 0) {
-      changes = 0;
+    bool changes = true;
+    while (changes) {
+      changes = false;
       for (auto it = graph_stations.begin(); it != graph_stations.end();) {
         auto const graph_station = it->first;
         auto const connection_set = it->second;
@@ -260,7 +242,7 @@ struct meat {
                             return con.to_station_ == graph_station;
                           }))) {
           it = graph_stations.erase(it);
-          ++changes;
+          changes = true;
         } else {
           ++it;
         }
@@ -277,7 +259,7 @@ struct meat {
 
           remove_leg_from_graph(graph_stations, leg);
           it = legs.erase(it);
-          changes++;
+          changes = true;
         } else {
           seen_trips.insert(leg.first.trip_);
           ++it;
@@ -315,12 +297,12 @@ struct meat {
       std::unordered_map<station_id, std::vector<csa_connection>>&
           graph_stations,
       std::vector<std::pair<csa_connection, csa_connection>>& legs) {
-    std::string output_string = "";
+    std::string output_string;
     output_string += "digraph {\n";
     output_string += "\trankdir=LR;\n";
     output_string += "\tnode [ shape=record ];\n";
     output_string += "\n";
-    for (auto graph_station : graph_stations) {
+    for (const auto& graph_station : graph_stations) {
       std::string station_str = "\t";
       station_str += std::to_string(graph_station.first);
       station_str += " [ label = \"";
@@ -470,7 +452,8 @@ private:
   csa_statistics& stats() const { return stats_; }
 
   motis::time schedule_begin_, schedule_end_;
-  interval search_interval_;
+  interval search_interval_{map_to_interval(q_.search_interval_.begin_),
+                            map_to_interval(q_.search_interval_.end_)};
   pareto_set<csa_journey, decltype(&dominates)> results_{
       make_pareto_set<csa_journey>(&dominates)};
   schedule const& sched_;
