@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
-#include <map>
 #include <queue>
 #include <set>
 #include <unordered_map>
@@ -210,25 +209,25 @@ struct meat {
 
     clean_graph(graph_stations, legs);
 
-    //if (!(graph_stations.empty() || legs.empty())) {
-      // Generate .dot representation of graph
-      // TODO Support für kompakte Darstellung
-      std::string output_string = generate_dot_graph(graph_stations, legs);
-      std::ofstream graph_file;
-      // TODO Query ID in den Dateinamen einbringen
-      std::string unique_id = std::to_string(q_.meta_starts_.at(0)) + "-" +
-                              std::to_string(q_.meta_dests_.at(0)) + "-" +
-                              std::to_string(search_interval_.begin_) + "-" +
-                              std::to_string(search_interval_.end_);
+    // if (!(graph_stations.empty() || legs.empty())) {
+    //  Generate .dot representation of graph
+    //  TODO Support für kompakte Darstellung
+    std::string output_string = generate_dot_graph(graph_stations, legs);
+    std::ofstream graph_file;
+    // TODO Query ID in den Dateinamen einbringen
+    std::string unique_id = std::to_string(q_.meta_starts_.at(0)) + "-" +
+                            std::to_string(q_.meta_dests_.at(0)) + "-" +
+                            std::to_string(search_interval_.begin_) + "-" +
+                            std::to_string(search_interval_.end_);
 
-      std::string filename = "responses-csa_meat-" + unique_id + ".dot";
-      graph_file.open(filename);
-      graph_file << output_string;
-      graph_file.close();
+    std::string filename = "responses-csa_meat-" + unique_id + ".dot";
+    graph_file.open(filename);
+    graph_file << output_string;
+    graph_file.close();
 
-      // TODO Vielleicht schon .png generieren?
-      // Aufruf der Kommandozeile mit
-      // 'dot -Tpng -o responses-csa_meat.png responses-csa_meat.dot'
+    // TODO Vielleicht schon .png generieren?
+    // Aufruf der Kommandozeile mit
+    // 'dot -Tpng -o responses-csa_meat.png responses-csa_meat.dot'
     //}
 
     MOTIS_STOP_TIMING(reconstruction_timing);

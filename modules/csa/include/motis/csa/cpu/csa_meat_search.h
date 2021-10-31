@@ -9,7 +9,6 @@
 #include "motis/core/schedule/interval.h"
 
 #include "motis/csa/csa_journey.h"
-#include "motis/csa/csa_meat_reconstruction.h"
 #include "motis/csa/csa_search_shared.h"
 #include "motis/csa/csa_statistics.h"
 #include "motis/csa/csa_timetable.h"
@@ -212,15 +211,11 @@ struct csa_meat_search {
     int d_fail = 0;
     int a_fail = 0;
     for (auto station_idx = 0; station_idx < s_.size(); ++station_idx) {
-      for (auto i = s_[station_idx].begin(); std::next(i) != s_[station_idx].end(); ++i) {
-        total++;
-        auto d1 = i->first;
-        auto a1 = i->second;
-        auto d2 = std::next(i)->first;
-        auto a2 = std::next(i)->second;
-        if (!(d1 <= d2)) {
-          d_fail++;
-          LOG(motis::logging::debug) << "[*] d_fail at station " << station_idx;
+      for (auto i = s_[station_idx].begin(); std::next(i) !=
+    s_[station_idx].end(); ++i) { total++; auto d1 = i->first; auto a1 =
+    i->second; auto d2 = std::next(i)->first; auto a2 = std::next(i)->second; if
+    (!(d1 <= d2)) { d_fail++; LOG(motis::logging::debug) << "[*] d_fail at
+    station " << station_idx;
         }
         if (!(a1 <= a2)) {
           a_fail++;
