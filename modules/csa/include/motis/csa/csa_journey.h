@@ -16,6 +16,7 @@ struct csa_journey {
                                             : start_time - arrival_time),
         transfers_(transfers),
         price_(price),
+        start_station_(nullptr),
         destination_station_(destination_station) {}
 
   bool is_reconstructed() const { return !edges_.empty(); }
@@ -83,9 +84,13 @@ struct csa_journey {
     }
     return out << "}";
   }
-
-  time journey_begin() const { return edges_.front().departure_; }
-  time journey_end() const { return edges_.back().arrival_; }
+  // TODO sometimes edges_ are empty, throws an exception
+  time journey_begin() const {
+    return edges_.empty() ? 0 : edges_.front().departure_;
+  }
+  time journey_end() const {
+    return edges_.empty() ? 0 : edges_.back().arrival_;
+  }
   time duration() const { return journey_end() - journey_begin(); }
 
   uint32_t query_idx_{0U};
