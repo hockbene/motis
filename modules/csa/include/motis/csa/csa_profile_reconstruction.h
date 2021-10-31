@@ -191,8 +191,43 @@ struct csa_profile_reconstruction {
     if (Dir == search_dir::FWD) {
       auto earliest_pair =
           find_earliest_profile_pair(station, transfers, tau_s);
+      for (auto const& fp : station.footpaths_) {
+        for (auto const& enter_con : get_enter_candidates(
+                 tt_.stations_[fp.to_station_],
+                 earliest_pair.first + fp.duration_, transfers)) {
+          auto const& trip_connections =
+              tt_.trip_to_connections_[enter_con->trip_];
+          auto const& first_connection =
+              std::find_if(trip_connections.begin(), trip_connections.end(),
+                           [enter_con](auto const& con) {
+                             return con->departure_ == enter_con->departure_;
+                           });
+          for (auto it = first_connection; it != trip_connections.end(); ++it) {
+            auto const& exit_con = *it;
+            auto const& arrival_station = tt_.stations_[exit_con->to_station_];
+            auto const& exit_pair = find_earliest_profile_pair(
+                arrival_station, transfers, exit_con->arrival_);
+            // Exit here if
+            // 1. The arrival time departing from the current stop (transfers -
+            // 1) matches the arrival time when taking the current trip OR
+            // 2. The connection ends at a target stop OR
+            // 3. The connection ends at a stop from which the target can be
+            // reached by foot
+            if ((transfers > 0 && earliest_pair.second[transfers] ==
+                                      exit_pair.second[transfers - 1]) ||
+                (is_destination(exit_con->to_station_))) {
+              return journey_pointer(enter_con, exit_con, &fp);
+            }
+          }
+        }
+      }
+      /*
+      // Otherwise, compute l_enter and l_exit
+      auto earliest_pair =
+          find_earliest_profile_pair(station, transfers, tau_s);
       std::unordered_map<csa_connection const*, footpath> candidates;
 
+      // TODO(root) auslagern zu get_enter_candidates?
       for (auto const& fp : station.footpaths_) {
         for (auto const& candidate :
              tt_.stations_[fp.to_station_].outgoing_connections_) {
@@ -201,7 +236,6 @@ struct csa_profile_reconstruction {
           }
         }
       }
-
       // TODO(root)  Optionally prune candidate set
       for (auto const& candidate : candidates) {
         auto const& enter_con = candidate.first;
@@ -219,12 +253,16 @@ struct csa_profile_reconstruction {
               arrival_station, transfers, exit_con->arrival_);
           if ((transfers != 0 &&
                earliest_pair.second[transfers] == e_p.second[transfers - 1]) ||
+              (std::find_if(targets_.begin(), targets_.end(),
+                            [&](auto const& station) {
+                              return station.id_ == arrival_station.id_;
+                            }) != targets_.end())) {
               (is_destination(arrival_station))) {
-            auto const fp = candidate.second;
-            return journey_pointer(enter_con, exit_con, &fp);
+                auto const fp = candidate.second;
+                return journey_pointer(enter_con, exit_con, &fp);
+              }
           }
-        }
-      }
+        }*/
     } else {
       auto earliest_pair =
           find_earliest_profile_pair(station, transfers, tau_s);
