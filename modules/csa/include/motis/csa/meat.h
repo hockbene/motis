@@ -39,13 +39,11 @@ struct meat {
   time static constexpr MAX_DELAY = 30;
   bool static constexpr FORCE_MAX_DELAY = true;
   double static constexpr ALPHA = 1.3;
-  // TODO(root) Support für Relaxed Dominance
+  // TODO(root) Support for Relaxed Dominance
   // relaxation tuning parameter beta
   // double static constexpr BETA = 0.0;
 
   response search() {
-    // To solve the α-bounded (s, τ s , t )-MEAT problem, we perform the
-    // following steps:
     csa_statistics stats;
     MOTIS_START_TIMING(total_timing);
 
@@ -56,22 +54,8 @@ struct meat {
     }
 
     MOTIS_START_TIMING(search_1_timing);
-    // (1) Run a binary search on the connection set to determine the earliest
-    //      connection c_first departing after τ_s .
-    // (2) Run a one-to-one Connection Scan from s to t that assumes all
-    // connections c are delayed by
-    //      max_D_c to determine esat_time(s, τ_s, t).
-
     esat_csa.search(FORCE_MAX_DELAY);
     MOTIS_STOP_TIMING(search_1_timing);
-
-    // (3) Let τ_last = τ_s + α · (esat_time(s, τ_s , t) − τ_s) and run a second
-    // binary search on the
-    //      connection set to find the last connection c_last departing before
-    //      τ_last.
-    // (4) Run a one-to-all Connection Scan from s restricted to the connections
-    // from c_first to c_last
-    //      to determine all eat(s, τ_s , ·).
 
     time tau_s = search_interval_.begin_;
     time esat_time =
@@ -87,10 +71,6 @@ struct meat {
       eat_csa.add_destination(tt_.stations_.at(dest_idx), 0);
     }
     MOTIS_START_TIMING(search_2_timing);
-    // (5) Run Phase 1 of the unbounded MEAT algorithm scanning the connections
-    // from c_last to c_first,
-    //      skipping connections c for which c_arr_time > τ_last or eat(s, τ_s ,
-    //      c_dep_stop ) ≤ c_dep_time does not hold.
     /*
     auto skip_connections = [&](csa_connection const& con) {
       return con.arrival_ > tau_last ||
@@ -104,16 +84,13 @@ struct meat {
      */
     MOTIS_STOP_TIMING(search_2_timing);
 
-    // arrival time of an optimal safe earliest arrival journey
     auto const esat = [&](station_id start, time tau_s) {
       return find_earliest_profile_pair(esat_csa.s_[start], tau_s);
     };
 
     MOTIS_START_TIMING(reconstruction_timing);
-    // (6) Finally, run Phase 2 of the unbounded MEAT algorithm; i.e., extract
-    // the (s, τ s , t )-decision graph.
 
-    // TODO(root) Graph Extraction auslagern
+    // TODO(root) move graph extraction, maybe to different file
     std::unordered_map<station_id, std::vector<csa_connection>> graph_stations;
     std::vector<std::pair<csa_connection, csa_connection>> legs;
 
@@ -192,10 +169,10 @@ struct meat {
 
     // if (!(graph_stations.empty() || legs.empty())) {
     //  Generate .dot representation of graph
-    //  TODO(root) Support für kompakte Darstellung
+    //  TODO(root) support for compact representation
     std::string output_string = generate_dot_graph(graph_stations, legs);
     std::ofstream graph_file;
-    // TODO(root) Query ID in den Dateinamen einbringen
+    // TODO(root) have query id in filename
     std::string unique_id = std::to_string(q_.meta_starts_.at(0)) + "-" +
                             std::to_string(q_.meta_dests_.at(0)) + "-" +
                             std::to_string(search_interval_.begin_) + "-" +
@@ -206,8 +183,8 @@ struct meat {
     graph_file << output_string;
     graph_file.close();
 
-    // TODO(root) Vielleicht schon .png generieren?
-    // Aufruf der Kommandozeile mit
+    // TODO(root) maybe already generate .png of graph?
+    // command line call with
     // 'dot -Tpng -o responses-csa_meat.png responses-csa_meat.dot'
     //}
 
@@ -315,7 +292,7 @@ struct meat {
       }
       for (auto timestamp : connection_times) {
         station_str += "|<" + std::to_string(timestamp) + ">";
-        // TODO(root) motis_time in lesbare Uhrzeit umwandeln (z.B. "%H:%M")
+        // TODO(root) put motis time in a readable time format (e.g. "%H:%M")
         station_str += std::to_string(timestamp);
       }
       station_str += "\"];\n";
@@ -332,7 +309,8 @@ struct meat {
       leg_str += ":";
       leg_str += std::to_string(leg.second.arrival_);
       // leg_str += ":w";
-      //  TODO(root) Sinnvolle Angabe des Trips (z.B. ICE 512) statt interner Trip-Id
+      //  TODO(root) useful information about the trip (e.g. ICE 512)
+      //   instead of MOTIS internal trip id
       leg_str += " [ label=\"" + std::to_string(leg.first.trip_) + "\" ];\n";
       output_string += leg_str;
     }

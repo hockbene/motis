@@ -129,17 +129,17 @@ struct csa_profile_search {
         continue;
       }
 
-      // tau_1 - erreichen per fußpfad
+      // tau_1 - reach by foot
       auto x = final_footpaths_[con.from_station_];
       if (x != INVALID) {
         x = con.departure_ - x;
       }
       auto const tau_1 = array_maker<time, MAX_TRANSFERS + 1>::make_array(x);
 
-      // tau_2 - erreichen per sitzenbleiben
+      // tau_2 - reach by staying in trip
       auto const tau_2 = trip_reachable_[con.trip_];
 
-      // tau_3 - erreichen per umstieg
+      // tau_3 - reach by transferring
       /*
       auto p_it = arrival_time_[con.from_station].end();
       while ((*p_it).first > con.departure_) {
@@ -194,11 +194,6 @@ struct csa_profile_search {
   }
 
   arrival_times get_tau_3(const csa_connection& con) {
-    /*
-    auto p_it = arrival_time_[con.to_station_].begin();
-    while (p_it->first < con.arrival_) {
-      p_it++;
-    }*/
     auto const station =
         Dir == search_dir::FWD ? con.to_station_ : con.from_station_;
     auto const timestamp =
@@ -210,15 +205,6 @@ struct csa_profile_search {
           return Dir == search_dir::FWD ? pair.first < t : pair.first > t;
         });
     return shift(p_it->second);
-
-    /*
-     * auto p_it = std::lower_bound(
-arrival_time_[con.from_station_].begin(),
-arrival_time_[con.from_station_].end(), con.departure_,
-[&](auto const pair, time t) { return pair.first > t; });
-
-auto const tau_3 = shift((*p_it).second);
-     */
   }
 
   void search() {
@@ -361,35 +347,6 @@ auto const tau_3 = shift((*p_it).second);
     if (DEBUG_OUTPUT) {
       LOG(motis::logging::debug) << changes_in_s;
     }
-    /*
-    if (DEBUG_OUTPUT) {
-      int total = 0;
-      int d_fail = 0;
-      int a_fail = 0;
-      for (auto station_idx = 0; station_idx < arrival_time_.size();
-    ++station_idx) { for (int i = 0; i <
-    static_cast<int>(arrival_time_[station_idx].size()) - 1; ++i) { total++;
-          auto d1 = arrival_time_[station_idx][i].first;
-          auto a1 = arrival_time_[station_idx][i].second;
-          auto d2 = arrival_time_[station_idx][i + 1].first;
-          auto a2 = arrival_time_[station_idx][i + 1].second;
-          if (!(d1 <= d2)) {
-            d_fail++;
-            LOG(motis::logging::debug)
-                << "[*] d_fail at station " << station_idx;
-          }
-          for (int j = 0; j < MAX_TRANSFERS + 1; ++j) {
-            if (!(a1[j] <= a2[j])) {
-              a_fail++;
-            }
-          }
-        }
-      }
-      LOG(motis::logging::debug) << "[*]  total " << total;
-      LOG(motis::logging::debug) << "[*] d_fail " << d_fail;
-      LOG(motis::logging::debug) << "[*] a_fail " << a_fail;
-    }
-    */
   }
 
   bool is_source_dominated(const std::pair<time, arrival_times>& profile_pair) {
@@ -464,29 +421,6 @@ auto const tau_3 = shift((*p_it).second);
         --it;
       }
     }
-
-    /*
-    auto entries_before_departure_time = std::vector<
-        std::pair<time, arrival_times>>();
-    while (arrival_time_[fp.from_station_][0].first < departure_time) {
-      entries_before_departure_time.insert(
-          entries_before_departure_time.begin(),
-    arrival_time_[fp.from_station_][0]);
-      arrival_time_[fp.from_station_].erase(arrival_time_[fp.from_station_].begin());
-    }
-
-    arrival_time_[fp.from_station_].insert(arrival_time_[fp.from_station_].begin(),
-                                {departure_time, arrival_profile});
-
-    while (!entries_before_departure_time.empty()) {
-            auto const pair = entries_before_departure_time[0];
-            entries_before_departure_time.erase(
-                entries_before_departure_time.begin());
-            //  pair.second = cw_min(pair.second, tau_c);
-            arrival_time_[fp.from_station_].insert(arrival_time_[fp.from_station_].begin(),
-    pair);
-          }
-          */
   }
 
   std::vector<csa_journey> get_results(csa_station const& station,
@@ -521,16 +455,15 @@ auto const tau_3 = shift((*p_it).second);
     return journeys;
   }
 
-  csa_timetable const& tt_;  // Fahrplan
-  interval search_interval_;  // Suchintervall
-  std::vector<std::list<std::pair<time, arrival_times>>>
-      arrival_time_;  // S - Profile
-  std::vector<arrival_times> trip_reachable_;  // T - Trips
-  std::vector<time> final_footpaths_;  // D - Fußpfade zum Ziel
+  csa_timetable const& tt_;
+  interval search_interval_;
+  std::vector<std::list<std::pair<time, arrival_times>>> arrival_time_;
+  std::vector<arrival_times> trip_reachable_;
+  std::vector<time> final_footpaths_;
   std::vector<bool> is_trip_reachable_;
-  std::set<station_id> targets_;  // Zielstationen
-  std::unordered_set<station_id> starts_;  // Startstationen
-  csa_statistics& stats_;  // Stats
+  std::set<station_id> targets_;
+  std::unordered_set<station_id> starts_;
+  csa_statistics& stats_;
   bool DEBUG_OUTPUT = false;
 };
 

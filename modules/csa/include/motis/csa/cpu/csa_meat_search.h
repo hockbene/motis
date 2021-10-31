@@ -153,15 +153,6 @@ struct csa_meat_search {
         Dir == search_dir::FWD ? tt_.fwd_connections_ : tt_.bwd_connections_;
 
     auto first_connection = connections.end();
-    /*
-    if (!force_max_delay) {
-      csa_connection const start_at{search_interval_.end_};
-      first_connection = std::upper_bound(
-          begin(connections), end(connections), start_at,
-          [&](csa_connection const& a, csa_connection const& b) {
-            return a.departure_ > b.departure_;
-          });
-    }*/
 
     auto last_connection = connections.begin();
     csa_connection const end_at{search_interval_.begin_};
@@ -205,23 +196,6 @@ struct csa_meat_search {
 
       t_[con.trip_] = tau_c;
     }
-
-    /*
-    int total = 0;
-    int d_fail = 0;
-    int a_fail = 0;
-    for (auto station_idx = 0; station_idx < s_.size(); ++station_idx) {
-      for (auto i = s_[station_idx].begin(); std::next(i) !=
-    s_[station_idx].end(); ++i) { total++; auto d1 = i->first; auto a1 =
-    i->second; auto d2 = std::next(i)->first; auto a2 = std::next(i)->second; if
-    (!(d1 <= d2)) { d_fail++; LOG(motis::logging::debug) << "[*] d_fail at
-    station " << station_idx;
-        }
-        if (!(a1 <= a2)) {
-          a_fail++;
-        }
-      }
-    }*/
   }
 
   void add_to_profile(const std::pair<time, time>& profile_pair,
@@ -242,26 +216,14 @@ struct csa_meat_search {
       return;
     }
 
-    // TODO(root) ist das richtig?
+    // TODO(root) is this correct?
     if (std::any_of(it, s_[station_id].end(), [&](auto other_pair) {
           return !dominates(profile_pair, other_pair);
         })) {
       return;
     }
 
-    // it = s_[station_id].insert(arrival_time_[station_id].begin(),
-    // profile_pair);
     it = s_[station_id].emplace(s_[station_id].begin(), profile_pair);
-
-    // TODO(root) was wenn .begin() entfernt werden muss?
-    /*
-    while (it != s_[station_id].begin()) {
-      if (dominates((*it), profile_pair)) {
-        it = s_[station_id].erase(it);
-      } else {
-        --it;
-      }
-    }*/
     for (auto r_it = std::make_reverse_iterator(it);
          r_it != s_[station_id].rend();) {
       if (dominates(*it, *r_it)) {
@@ -284,14 +246,14 @@ struct csa_meat_search {
     return {};
   }
 
-  csa_timetable const& tt_;  // Fahrplan
-  interval search_interval_;  // Suchintervall
-  std::vector<std::list<std::pair<time, time>>> s_;  // S - Profile
-  std::vector<time> t_;  // T - Trips
-  std::vector<csa_station> targets_;  // Zielstationen
-  std::vector<time> d_;  // D - Fußpfade zum Ziel
-  std::unordered_set<station_id> starts_;  // Startstationen
-  csa_statistics& stats_;  // Stats
+  csa_timetable const& tt_;
+  interval search_interval_;
+  std::vector<std::list<std::pair<time, time>>> s_;
+  std::vector<time> t_;
+  std::vector<csa_station> targets_;
+  std::vector<time> d_;
+  std::unordered_set<station_id> starts_;
+  csa_statistics& stats_;
   time MAX_DELAY;
   bool DEBUG_OUTPUT = false;
 };

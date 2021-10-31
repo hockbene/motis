@@ -44,8 +44,8 @@ struct csa_profile_reconstruction {
   }
 
   // TODO(root) BWD
-  // TODO(root) geht das nicht effizienter? Im Worst case wird das Profil 2x
-  // komplett gescannt
+  // TODO(root) may be very inefficient.
+  //  In the worst case, the profile gets scanned two times
   std::pair<time, std::array<time, MAX_TRANSFERS + 1>>
   find_earliest_profile_pair(csa_station const& station, int transfers,
                              time const tau_s) {
@@ -80,8 +80,6 @@ struct csa_profile_reconstruction {
     auto start = journey.start_station_;
     auto transfers = journey.transfers_;
     auto tau_s = journey.start_time_;
-    // Optimiere (d, a) um für gegebene Ankunftszeit und Transfers die beste
-    // Ankunftszeit zu finden
     auto const optimal_profile =
         find_earliest_profile_pair(*start, transfers, tau_s);
 
@@ -100,17 +98,11 @@ struct csa_profile_reconstruction {
       }
     }
     journey.destination_station_ = start;
-    /*
-    if (Dir == search_dir::FWD) {
-      std::reverse(begin(journey.edges_), end(journey.edges_));
-    }
-    */
   }
 
   void add_journey_leg(csa_journey& journey, journey_pointer& jp) {
     if (jp.footpath_->from_station_ != jp.footpath_->to_station_) {
       if (Dir == search_dir::FWD) {
-        // Füge diesen Footpath als Edge hinten an den Edges an
         journey.edges_.emplace_back(
             &tt_.stations_[jp.footpath_->from_station_],
             &tt_.stations_[jp.footpath_->to_station_],
@@ -194,49 +186,13 @@ struct csa_profile_reconstruction {
                                  "a matching final footpath to add";
   }
 
-  // TODO(root) BWD
   journey_pointer get_journey_pointer(csa_station const& station, int transfers,
                                       time tau_s) {
     if (Dir == search_dir::FWD) {
       auto earliest_pair =
           find_earliest_profile_pair(station, transfers, tau_s);
-      for (auto const& fp : station.footpaths_) {
-        for (auto const& enter_con : get_enter_candidates(
-                 tt_.stations_[fp.to_station_],
-                 earliest_pair.first + fp.duration_, transfers)) {
-          auto const& trip_connections =
-              tt_.trip_to_connections_[enter_con->trip_];
-          auto const& first_connection =
-              std::find_if(trip_connections.begin(), trip_connections.end(),
-                           [enter_con](auto const& con) {
-                             return con->departure_ == enter_con->departure_;
-                           });
-          for (auto it = first_connection; it != trip_connections.end(); ++it) {
-            auto const& exit_con = *it;
-            auto const& arrival_station = tt_.stations_[exit_con->to_station_];
-            auto const& exit_pair = find_earliest_profile_pair(
-                arrival_station, transfers, exit_con->arrival_);
-            // Exit here if
-            // 1. The arrival time departing from the current stop (transfers -
-            // 1) matches the arrival time when taking the current trip OR
-            // 2. The connection ends at a target stop OR
-            // 3. The connection ends at a stop from which the target can be
-            // reached by foot
-            if ((transfers > 0 && earliest_pair.second[transfers] ==
-                                      exit_pair.second[transfers - 1]) ||
-                (is_destination(exit_con->to_station_))) {
-              return journey_pointer(enter_con, exit_con, &fp);
-            }
-          }
-        }
-      }
-      /*
-      // Otherwise, compute l_enter and l_exit
-      auto earliest_pair =
-          find_earliest_profile_pair(station, transfers, tau_s);
       std::unordered_map<csa_connection const*, footpath> candidates;
 
-      // TODO(root) auslagern zu get_enter_candidates?
       for (auto const& fp : station.footpaths_) {
         for (auto const& candidate :
              tt_.stations_[fp.to_station_].outgoing_connections_) {
@@ -263,15 +219,12 @@ struct csa_profile_reconstruction {
               arrival_station, transfers, exit_con->arrival_);
           if ((transfers != 0 &&
                earliest_pair.second[transfers] == e_p.second[transfers - 1]) ||
-              (std::find_if(targets_.begin(), targets_.end(),
-                            [&](auto const& station) {
-                              return station.id_ == arrival_station.id_;
-                            }) != targets_.end())) {
+              (is_destination(arrival_station))) {
             auto const fp = candidate.second;
             return journey_pointer(enter_con, exit_con, &fp);
           }
         }
-      }*/
+      }
     } else {
       auto earliest_pair =
           find_earliest_profile_pair(station, transfers, tau_s);
@@ -307,7 +260,6 @@ struct csa_profile_reconstruction {
         }
       }
     }
-    // Es wurde kein Journey Pointer gefunden, returne leeren Pointer
     return {};
   }
 
@@ -318,7 +270,7 @@ struct csa_profile_reconstruction {
                  [this, arrival_time, transfers](csa_connection const* con) {
                    return con->arrival_ != arrival_time ||
                           // !trip_reachable_[con->trip_][transfers - 1] ||
-                          // TODO(root) wird das benötigt?
+                          // TODO(root) is this necessary?
                           !con->to_out_allowed_;
                  })  //
            | utl::iterable();
@@ -331,7 +283,7 @@ struct csa_profile_reconstruction {
                  [this, departure_time, transfers](csa_connection const* con) {
                    return con->departure_ != departure_time ||
                           // !trip_reachable_[con->trip_][transfers - 1] ||
-                          // TODO(root) wird das benötigt?
+                          // TODO(root) is this necessary?
                           !con->from_in_allowed_;
                  })  //
            | utl::iterable();
