@@ -37,8 +37,9 @@ struct csa_profile_search {
             {std::make_pair(
                 INVALID,
                 array_maker<time, MAX_TRANSFERS + 1>::make_array(INVALID))}),
-        trip_reachable_(tt.trip_count_,
-           array_maker<time, MAX_TRANSFERS + 1>::make_array(INVALID)),
+        trip_reachable_(
+            tt.trip_count_,
+            array_maker<time, MAX_TRANSFERS + 1>::make_array(INVALID)),
         final_footpaths_(tt.stations_.size(), INVALID),
         is_trip_reachable_(tt.trip_count_, true),
         starts_(),
@@ -160,7 +161,8 @@ struct csa_profile_search {
       assert(y.size() == tau_c.size());
       auto const arrival_profile = cw_min(y, tau_c);
 
-      if (y != tau_c) {
+      if (y != tau_c && !is_dominated_in(std::make_pair(con.arrival_, tau_c),
+                                         arrival_time_[con.to_station_])) {
         for (auto fp : tt_.stations_[con.to_station_].footpaths_) {
           auto const departure_time = con.arrival_ + fp.duration_;
           auto const profile_pair =
@@ -186,7 +188,9 @@ struct csa_profile_search {
     return array_maker<time, MAX_TRANSFERS + 1>::make_array(x);
   }
 
-  arrival_times get_tau_2(const csa_connection& con) { return trip_reachable_[con.trip_]; }
+  arrival_times get_tau_2(const csa_connection& con) {
+    return trip_reachable_[con.trip_];
+  }
 
   arrival_times get_tau_3(const csa_connection& con) {
     /*
@@ -315,13 +319,15 @@ auto const tau_3 = shift((*p_it).second);
           arrival_time_[con.from_station_].begin(),
           arrival_time_[con.from_station_].end(),
           [&](auto const pair) { return pair.first >= con.departure_; });
-      auto const y = (*y_p).second;
+      auto const y = y_p->second;
 
       assert(y.size() == tau_c.size());
 
       auto const arrival_profile = cw_min(y, tau_c);
 
-      if (y != tau_c) {
+      // TODO Limited Walking Optimization
+      if (y != tau_c && !is_dominated_in(std::make_pair(con.departure_, tau_c),
+                                         arrival_time_[con.from_station_])) {
         auto const& footpaths =
             Dir == search_dir::FWD
                 ? tt_.stations_[con.from_station_].incoming_footpaths_
@@ -393,6 +399,15 @@ auto const tau_3 = shift((*p_it).second);
       }
     }
     return false;
+  }
+
+  bool is_dominated_in(
+      const std::pair<time, arrival_times>& new_pair,
+      const std::list<std::pair<time, arrival_times>>& profile) {
+    return std::any_of(profile.begin(), profile.end(),
+                       [&](auto const& profile_pair) {
+                         return dominates_profile(profile_pair, new_pair);
+                       });
   }
 
   // TODO BWD
@@ -480,11 +495,10 @@ auto const tau_3 = shift((*p_it).second);
                    std::system_error{error::include_equivalent_not_supported});
 
     std::vector<csa_journey> journeys;
-    auto journey_reconstruction =
-        csa_profile_reconstruction<Dir, decltype(arrival_time_),
-                                   decltype(final_footpaths_), decltype(trip_reachable_),
-                                   decltype(targets_)>{
-            tt_, arrival_time_, final_footpaths_, trip_reachable_, targets_};
+    auto journey_reconstruction = csa_profile_reconstruction<
+        Dir, decltype(arrival_time_), decltype(final_footpaths_),
+        decltype(trip_reachable_), decltype(targets_)>{
+        tt_, arrival_time_, final_footpaths_, trip_reachable_, targets_};
     auto const& station_profile = arrival_time_[station.id_];
     for (auto it = station_profile.begin(); it != station_profile.end(); ++it) {
       auto const profile_pair = *it;
