@@ -18,7 +18,8 @@ enum error_code_t {
   additional_edges_not_supported = 8,
   trip_not_found = 9,
   start_footpaths_no_disable = 10,
-  include_equivalent_not_supported = 11
+  include_equivalent_not_supported = 11,
+  algorithm_type_not_supported = 12
 };
 }  // namespace error
 
@@ -47,6 +48,8 @@ public:
         return "csa: start footpaths cannot be disabled";
       case error::include_equivalent_not_supported:
         return "csa: include equivalent not supported";
+      case error::algorithm_type_not_supported:
+        return "csa: requested algorithm type not supported";
       default: return "csa: unknown error";
     }
   }

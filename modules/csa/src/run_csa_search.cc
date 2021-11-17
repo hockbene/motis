@@ -116,7 +116,8 @@ response dispatch_search_type(schedule const& sched, csa_timetable const& tt,
             case algorithm_type::MEAT:
               return run_meat_search<cpu::csa_meat_search<Dir>,
                                      cpu::csa_search<Dir>>(sched, tt, q);
-              // TODO add default case with error
+            default:
+              throw std::system_error(error::algorithm_type_not_supported);
           }
         default: throw std::system_error(error::search_type_not_supported);
       }
