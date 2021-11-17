@@ -45,6 +45,15 @@ struct csa_search {
   }
 
   void search() {
+    search(0, [](auto const& con) {
+      (void)con;
+      return false;
+    });
+  }
+
+  void search(
+      time con_delay,
+      const std::function<bool(csa_connection const&)>& skip_connection) {
     auto const& connections =
         Dir == search_dir::FWD ? tt_.fwd_connections_ : tt_.bwd_connections_;
 
@@ -99,11 +108,11 @@ struct csa_search {
           if (update) {
             stats_.footpaths_expanded_++;
             if (Dir == search_dir::FWD) {
-              expand_footpaths(tt_.stations_[con.to_station_], con.arrival_,
-                               transfers + 1);
+              expand_footpaths(tt_.stations_[con.to_station_],
+                               con.arrival_ + con_delay, transfers + 1);
             } else {
-              expand_footpaths(tt_.stations_[con.from_station_], con.departure_,
-                               transfers + 1);
+              expand_footpaths(tt_.stations_[con.from_station_],
+                               con.departure_ - con_delay, transfers + 1);
             }
           }
         }

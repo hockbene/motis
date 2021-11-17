@@ -56,7 +56,7 @@ struct csa_meat_search {
         0.0545894933359402532822712645253880743267959179777052964246808160;
     double const m_factor =
         0.7424704259200729207770238380557645758993331541863263278390933206;
-    return std::floor(d * d_factor + m * m_factor);
+    return std::ceil(d * d_factor + m * m_factor);
   }
 
   double f(double x, time m, time d) {
@@ -71,23 +71,18 @@ struct csa_meat_search {
     }
   }
 
-  time get_tau_1(const csa_connection& con, bool force_max_delay = false) {
+  time get_tau_1(const csa_connection& con) {
     auto tau_1 = d_[con.to_station_];
     if (tau_1 != INVALID) {
-      auto const expected_delay = force_max_delay
-                                      ? tau_1 + MAX_DELAY
-                                      : expected_value(tau_1, MAX_DELAY);
+      auto const expected_delay = expected_value(tau_1, MAX_DELAY);
       tau_1 = con.arrival_ + expected_delay;
     }
     return tau_1;
   }
 
-  time get_tau_2(const csa_connection& con, bool force_max_delay = false) {
-    (void)force_max_delay;
-    return t_[con.trip_];
-  }
+  time get_tau_2(const csa_connection& con) { return t_[con.trip_]; }
 
-  time get_tau_3(const csa_connection& con, bool force_max_delay = false) {
+  time get_tau_3(const csa_connection& con) {
     auto const transfer_time = tt_.stations_[con.to_station_].transfer_time_;
 
     auto const first_pair = std::lower_bound(
@@ -103,10 +98,6 @@ struct csa_meat_search {
         [&](time t, auto const& pair) { return pair.first > t; });
     if (safe_pair->first == INVALID) {
       return INVALID;
-    }
-
-    if (force_max_delay) {
-      return safe_pair->second;
     }
 
     std::list<std::pair<time, time>> relevant_pairs(first_pair,
@@ -130,7 +121,7 @@ struct csa_meat_search {
     }
 
     if (tau_3 != INVALID) {
-      tau_3 = std::floor(eat);
+      tau_3 = std::ceil(eat);
     }
 
     return tau_3;
@@ -142,13 +133,14 @@ struct csa_meat_search {
            (a.first < b.first || a.second < b.second);
   }
 
-  void search(
-      bool force_max_delay = false,
-      std::function<bool(csa_connection const&)> skip_connection =
-          [](auto const& con) {
-            (void)con;
-            return false;
-          }) {
+  void search() {
+    search([](auto const& con) {
+      (void)con;
+      return false;
+    });
+  }
+
+  void search(std::function<bool(csa_connection const&)> skip_connection) {
     auto const& connections =
         Dir == search_dir::FWD ? tt_.fwd_connections_ : tt_.bwd_connections_;
 
@@ -171,9 +163,9 @@ struct csa_meat_search {
         continue;
       }
 
-      auto const tau_1 = get_tau_1(con, force_max_delay);
-      auto const tau_2 = get_tau_2(con, force_max_delay);
-      auto const tau_3 = get_tau_3(con, force_max_delay);
+      auto const tau_1 = get_tau_1(con);
+      auto const tau_2 = get_tau_2(con);
+      auto const tau_3 = get_tau_3(con);
       auto const tau_c = std::min(tau_1, std::min(tau_2, tau_3));
 
       if (tau_c == INVALID) {
@@ -236,13 +228,11 @@ struct csa_meat_search {
   }
 
   std::vector<csa_journey> get_results(csa_station const& station,
-                                       bool include_equivalent,
-                                       bool force_max_delay = false) {
+                                       bool include_equivalent) {
     utl::verify_ex(!include_equivalent,
                    std::system_error{error::include_equivalent_not_supported});
 
     (void)station;
-    (void)force_max_delay;
     return {};
   }
 

@@ -90,11 +90,11 @@ response run_profile_search(schedule const& sched, csa_timetable const& tt,
   }
 }
 
-template <typename CSAMeatSearch>
+template <typename CSAMeatSearch, typename CSAOnTripSearch>
 response run_meat_search(schedule const& sched, csa_timetable const& tt,
                          csa_query const& q) {
   csa_statistics stats;
-  return meat<CSAMeatSearch>(sched, tt, q, stats).search();
+  return meat<CSAMeatSearch, CSAOnTripSearch>(sched, tt, q, stats).search();
 }
 
 template <search_dir Dir>
@@ -114,7 +114,8 @@ response dispatch_search_type(schedule const& sched, csa_timetable const& tt,
               return run_profile_search<cpu::csa_profile_search<Dir>,
                                         cpu::csa_search<Dir>>(sched, tt, q);
             case algorithm_type::MEAT:
-              return run_meat_search<cpu::csa_meat_search<Dir>>(sched, tt, q);
+              return run_meat_search<cpu::csa_meat_search<Dir>,
+                                     cpu::csa_search<Dir>>(sched, tt, q);
               // TODO add default case with error
           }
         default: throw std::system_error(error::search_type_not_supported);
