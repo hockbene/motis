@@ -75,6 +75,10 @@ struct csa_search {
     for (auto it = first_connection; it != end(connections); ++it) {
       auto const& con = *it;
 
+      if (skip_connection(con)) {
+        continue;
+      }
+
       auto& trip_reachable = trip_reachable_[con.trip_];
       auto const& from_arrival_time = arrival_time_[con.from_station_];
       auto const& to_arrival_time = arrival_time_[con.to_station_];
