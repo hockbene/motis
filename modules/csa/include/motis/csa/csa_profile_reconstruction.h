@@ -17,12 +17,15 @@ namespace motis::csa {
 template <search_dir Dir, typename ArrivalTimes, typename FinalFootpaths,
           typename TripReachable, typename Targets>
 struct csa_profile_reconstruction {
+  // TODO(root): fix getting type from ArrivalTimes
+  /*
   using arrival_time_t = std::remove_reference_t<
       std::remove_cv_t<decltype(std::declval<ArrivalTimes>()[0])>>;
-
-  static constexpr auto INVALID =
-      Dir == search_dir::FWD ? std::numeric_limits<arrival_time_t>::max()
-                             : std::numeric_limits<arrival_time_t>::min();
+  */
+  // for now hardcoded with motis::time
+  static constexpr auto INVALID = Dir == search_dir::FWD
+                                      ? std::numeric_limits<time>::max()
+                                      : std::numeric_limits<time>::min();
 
   csa_profile_reconstruction(csa_timetable const& tt,
                              ArrivalTimes const& arrival_time,
