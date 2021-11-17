@@ -250,7 +250,6 @@ struct pretrip_profile_search {
   void run_search(CSAProfileSearch& profile_csa, Results& results) {
 
     MOTIS_START_TIMING(search_timing);
-
     profile_csa.search();
     MOTIS_STOP_TIMING(search_timing);
 

@@ -26,19 +26,19 @@ struct csa_meat_search {
                   csa_statistics& stats, time max_delay)
       : tt_{tt},
         search_interval_{search_interval},
-        s_(tt.stations_.size(), {{INVALID, INVALID}}),
-        t_(tt.trip_count_, INVALID),
-        d_(tt.stations_.size(), INVALID),
-        starts_(),
+        arrival_time_(tt.stations_.size(), {{INVALID, INVALID}}),
+        trip_arrival_time_(tt.trip_count_, INVALID),
+        final_footpaths_(tt.stations_.size(), INVALID),
         stats_{stats},
         MAX_DELAY(max_delay) {}
 
   void add_destination(csa_station const& station, time /*initial_duration*/) {
     // For now initial_duration is always 0
     targets_.emplace_back(station);
-    // Initialize d_
+    // Initialize final_footpaths_
     for (auto const& fp : station.incoming_footpaths_) {
-      d_[fp.from_station_] = std::min(fp.duration_, d_[fp.from_station_]);
+      final_footpaths_[fp.from_station_] =
+          std::min(fp.duration_, final_footpaths_[fp.from_station_]);
     }
     stats_.destination_count_++;
   }
@@ -71,30 +71,33 @@ struct csa_meat_search {
     }
   }
 
-  time get_tau_1(const csa_connection& con) {
-    auto tau_1 = d_[con.to_station_];
-    if (tau_1 != INVALID) {
-      auto const expected_delay = expected_value(tau_1, MAX_DELAY);
-      tau_1 = con.arrival_ + expected_delay;
+  time get_time_walking(const csa_connection& con) {
+    auto time_walking = final_footpaths_[con.to_station_];
+    if (time_walking != INVALID) {
+      auto const expected_delay = expected_value(time_walking, MAX_DELAY);
+      time_walking = con.arrival_ + expected_delay;
     }
-    return tau_1;
+    return time_walking;
   }
 
-  time get_tau_2(const csa_connection& con) { return t_[con.trip_]; }
+  time get_time_trip(const csa_connection& con) {
+    return trip_arrival_time_[con.trip_];
+  }
 
-  time get_tau_3(const csa_connection& con) {
+  time get_time_transfer(const csa_connection& con) {
     auto const transfer_time = tt_.stations_[con.to_station_].transfer_time_;
 
     auto const first_pair = std::lower_bound(
-        s_[con.to_station_].begin(), s_[con.to_station_].end(), con.arrival_,
+        arrival_time_[con.to_station_].begin(),
+        arrival_time_[con.to_station_].end(), con.arrival_,
         [&](auto const& pair, time t) { return pair.first < t; });
     if (first_pair->first == INVALID) {
       return INVALID;
     }
 
     auto const safe_pair = std::upper_bound(
-        s_[con.to_station_].begin(), s_[con.to_station_].end(),
-        con.arrival_ + MAX_DELAY,
+        arrival_time_[con.to_station_].begin(),
+        arrival_time_[con.to_station_].end(), con.arrival_ + MAX_DELAY,
         [&](time t, auto const& pair) { return pair.first > t; });
     if (safe_pair->first == INVALID) {
       return INVALID;
@@ -105,26 +108,25 @@ struct csa_meat_search {
     relevant_pairs.insert(relevant_pairs.begin(), std::make_pair(0, 0));
 
     auto eat = 0;
-    auto tau_3 = 0;
-    for (auto it = relevant_pairs.begin();
-         std::next(it) != relevant_pairs.end(); ++it) {
-      auto const prev_p = *it;
-      auto const curr_p = *std::next(it);
+    auto time_transfer = 0;
+    for (auto prev_pair = relevant_pairs.begin();
+         std::next(prev_pair) != relevant_pairs.end(); ++prev_pair) {
+      auto const curr_pair = std::next(prev_pair);
       auto const probability =
-          f(curr_p.first - con.arrival_, transfer_time, MAX_DELAY) -
-          f(prev_p.first - con.arrival_, transfer_time, MAX_DELAY);
+          f(curr_pair->first - con.arrival_, transfer_time, MAX_DELAY) -
+          f(prev_pair->first - con.arrival_, transfer_time, MAX_DELAY);
 
-      if (curr_p.second == INVALID) {
-        tau_3 = INVALID;
+      if (curr_pair->second == INVALID) {
+        time_transfer = INVALID;
       }
-      eat += probability * curr_p.second;
+      eat += probability * curr_pair->second;
     }
 
-    if (tau_3 != INVALID) {
-      tau_3 = std::ceil(eat);
+    if (time_transfer != INVALID) {
+      time_transfer = std::ceil(eat);
     }
 
-    return tau_3;
+    return time_transfer;
   }
 
   bool dominates(const std::pair<time, time>& a,
@@ -163,37 +165,41 @@ struct csa_meat_search {
         continue;
       }
 
-      auto const tau_1 = get_tau_1(con);
-      auto const tau_2 = get_tau_2(con);
-      auto const tau_3 = get_tau_3(con);
-      auto const tau_c = std::min(tau_1, std::min(tau_2, tau_3));
+      auto const time_walking = get_time_walking(con);
+      auto const time_trip = get_time_trip(con);
+      auto const time_transfer = get_time_transfer(con);
+      auto const min_arrival_time =
+          std::min(time_walking, std::min(time_trip, time_transfer));
 
-      if (tau_c == INVALID) {
+      if (min_arrival_time == INVALID) {
         continue;
       }
-      auto const profile_pair = std::make_pair(con.departure_, tau_c);
+      auto const profile_pair =
+          std::make_pair(con.departure_, min_arrival_time);
 
       bool is_non_dominated =
-          std::none_of(s_[con.to_station_].begin(), s_[con.to_station_].end(),
+          std::none_of(arrival_time_[con.to_station_].begin(),
+                       arrival_time_[con.to_station_].end(),
                        [&](std::pair<time, time> pair) {
                          return dominates(pair, profile_pair);
                        });
 
       if (is_non_dominated) {
         for (auto fp : tt_.stations_[con.from_station_].incoming_footpaths_) {
-          add_to_profile(std::make_pair(con.departure_ - fp.duration_, tau_c),
-                         fp.from_station_);
+          add_to_profile(
+              std::make_pair(con.departure_ - fp.duration_, min_arrival_time),
+              fp.from_station_);
         }
       }
 
-      t_[con.trip_] = tau_c;
+      trip_arrival_time_[con.trip_] = min_arrival_time;
     }
   }
 
   void add_to_profile(const std::pair<time, time>& profile_pair,
                       const uint32_t station_id) {
 
-    auto it = s_[station_id].begin();
+    auto it = arrival_time_[station_id].begin();
     if (Dir == search_dir::FWD) {
       while (it->first < profile_pair.first) {
         it++;
@@ -209,18 +215,19 @@ struct csa_meat_search {
     }
 
     // TODO(root) is this correct?
-    if (std::any_of(it, s_[station_id].end(), [&](auto other_pair) {
+    if (std::any_of(it, arrival_time_[station_id].end(), [&](auto other_pair) {
           return !dominates(profile_pair, other_pair);
         })) {
       return;
     }
 
-    it = s_[station_id].emplace(s_[station_id].begin(), profile_pair);
+    it = arrival_time_[station_id].emplace(arrival_time_[station_id].begin(),
+                                           profile_pair);
     for (auto r_it = std::make_reverse_iterator(it);
-         r_it != s_[station_id].rend();) {
+         r_it != arrival_time_[station_id].rend();) {
       if (dominates(*it, *r_it)) {
         r_it = std::make_reverse_iterator(
-            s_[station_id].erase(std::next(r_it).base()));
+            arrival_time_[station_id].erase(std::next(r_it).base()));
       } else {
         ++it;
       }
@@ -238,11 +245,10 @@ struct csa_meat_search {
 
   csa_timetable const& tt_;
   interval search_interval_;
-  std::vector<std::list<std::pair<time, time>>> s_;
-  std::vector<time> t_;
+  std::vector<std::list<std::pair<time, time>>> arrival_time_;
+  std::vector<time> trip_arrival_time_;
   std::vector<csa_station> targets_;
-  std::vector<time> d_;
-  std::unordered_set<station_id> starts_;
+  std::vector<time> final_footpaths_;
   csa_statistics& stats_;
   time MAX_DELAY;
   bool DEBUG_OUTPUT = false;
