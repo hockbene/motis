@@ -1,6 +1,7 @@
 #pragma once
 
 #include <limits>
+#include <list>
 #include <unordered_set>
 #include <vector>
 
