@@ -146,45 +146,6 @@ struct csa_profile_search {
     auto const& connections =
         Dir == search_dir::FWD ? tt_.fwd_connections_ : tt_.bwd_connections_;
 
-    if (DEBUG_OUTPUT) {
-      LOG(motis::logging::debug)
-          << "[*] search interval (" << search_interval_.begin_ << ", "
-          << search_interval_.end_ << ")";
-      for (auto t : targets_) {
-        LOG(motis::logging::debug) << "[*] target " << t;
-      }
-      for (auto my_station : tt_.stations_) {
-        LOG(motis::logging::debug)
-            << "[S]" << my_station.id_ << "_{"
-            << "\"id\":" << my_station.id_ << ", "
-            << "\"name\":"
-            << "\"" << my_station.station_ptr_->name_ << "\", "
-            << "\"lat\":" << my_station.station_ptr_->lat() << ", "
-            << "\"long\":" << my_station.station_ptr_->lng() << ", "
-            << "\"transfer\":" << my_station.transfer_time_ << ", "
-            << "\"incoming_connections\":"
-            << my_station.incoming_connections_.size() << ", "
-            << "\"outgoing_connections\":"
-            << my_station.outgoing_connections_.size() << ", "
-            << "}";
-        for (auto fp : my_station.footpaths_) {
-          LOG(motis::logging::debug) << "[F]{"
-                                     << "\"from\":" << fp.from_station_ << ", "
-                                     << "\"to\":" << fp.to_station_ << ", "
-                                     << "\"duration\":" << fp.duration_ << "}";
-        }
-      }
-      for (auto con : connections) {
-        LOG(motis::logging::debug)
-            << "[C]{"
-            << "\"dep_time\":" << con.departure_ << ","
-            << "\"dep_stop\":" << con.from_station_ << ","
-            << "\"arr_time\":" << con.arrival_ << ","
-            << "\"arr_stop\":" << con.to_station_ << ","
-            << "\"trip\":" << con.trip_ << "}";
-      }
-    }
-
     csa_connection const earliest_con{search_interval_.begin_};
     auto const last_connection = connections.rbegin();
     auto const first_connection = std::upper_bound(
@@ -240,21 +201,11 @@ struct csa_profile_search {
           add_to_profile(profile_pair, footpath_start);
         }
       }
-
       trip_reachable_[con.trip_] = min_arrival_time;
-      if (DEBUG_OUTPUT) {
-        std::string min_arrival_time_string;
-        for (auto t : min_arrival_time) {
-          min_arrival_time_string += std::to_string(t);
-          min_arrival_time_string += ", ";
-        }
-        LOG(motis::logging::debug)
-            << "[T]" << con.trip_ << "_(" << min_arrival_time_string << ")";
-      }
       stats_.connections_scanned_++;
     }
   }
-
+  /*
   bool is_source_dominated(const std::pair<time, arrival_times>& profile_pair) {
     for (auto start_idx : starts_) {
       if (dominates_profile(arrival_time_[start_idx].front(), profile_pair)) {
@@ -262,7 +213,7 @@ struct csa_profile_search {
       }
     }
     return false;
-  }
+  }*/
 
   bool is_dominated_in(
       const std::pair<time, arrival_times>& new_pair,
@@ -292,16 +243,6 @@ struct csa_profile_search {
 
     auto const inserted_at = arrival_time.insert(insert_position, profile_pair);
 
-    if (DEBUG_OUTPUT) {
-      std::string profile;
-      for (auto p : profile_pair.second) {
-        profile += std::to_string(p);
-        profile += ", ";
-      }
-      LOG(motis::logging::debug)
-          << "[P](" << profile_pair.first << ", (" << profile << "))_"
-          << station_id << "_" << tt_.stations_[station_id].station_ptr_->name_;
-    }
     for (auto it = std::make_reverse_iterator(inserted_at);
          it != arrival_time.rend();) {
       if (dominates_profile(profile_pair, *it)) {
@@ -354,7 +295,6 @@ struct csa_profile_search {
   std::set<station_id> targets_;
   std::unordered_set<station_id> starts_;
   csa_statistics& stats_;
-  bool DEBUG_OUTPUT = false;
 };
 
 }  // namespace motis::csa::cpu
