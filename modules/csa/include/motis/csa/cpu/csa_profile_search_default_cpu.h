@@ -67,9 +67,8 @@ struct csa_profile_search {
 
   bool dominates_profile(std::pair<time, arrival_times> const& a,
                          std::pair<time, arrival_times> const& b) {
-    assert(a.second.size() == b.second.size());
     bool dominates = false;
-    auto const dominates_triple = [&](time x1, time x2, time y1, time y2) {
+    auto const dominates_pair = [&](time x1, time x2, time y1, time y2) {
       return Dir == search_dir::FWD
                  ? (x1 <= y1 && x2 <= y2) && (x1 < y1 || x2 < y2)
                  : (x1 >= y1 && x2 >= y2) && (x1 > y1 || x2 > y2);
@@ -77,10 +76,10 @@ struct csa_profile_search {
     for (auto i = 0; i < a.second.size(); ++i) {
       time a1 = a.first, a2 = a.second[i];
       time b1 = b.first, b2 = b.second[i];
-      if (dominates_triple(b1, b2, a1, a2)) {
+      if (dominates_pair(b1, b2, a1, a2)) {
         return false;
       }
-      dominates = dominates || dominates_triple(a1, a2, b1, b2);
+      dominates = dominates || dominates_pair(a1, a2, b1, b2);
     }
     return dominates;
   }
@@ -98,7 +97,6 @@ struct csa_profile_search {
   }
 
   arrival_times cw_min(arrival_times a, arrival_times b) {
-    assert(a.size() == b.size());
     auto c = array_maker<time, MAX_TRANSFERS + 1>::make_array(INVALID);
     if (Dir == search_dir::FWD) {
       std::transform(a.begin(), a.end(), b.begin(), c.begin(),
@@ -108,6 +106,10 @@ struct csa_profile_search {
                      [](time x, time y) { return std::max(x, y); });
     }
     return c;
+  }
+
+  arrival_times cw_min(arrival_times a, arrival_times b, arrival_times c) {
+    return cw_min(cw_min(a, b), c);
   }
 
   void search_bwd() {
@@ -129,17 +131,18 @@ struct csa_profile_search {
         continue;
       }
 
-      // tau_1 - reach by foot
+      // time_walking - reach by foot
       auto x = final_footpaths_[con.from_station_];
       if (x != INVALID) {
         x = con.departure_ - x;
       }
-      auto const tau_1 = array_maker<time, MAX_TRANSFERS + 1>::make_array(x);
+      auto const time_walking =
+          array_maker<time, MAX_TRANSFERS + 1>::make_array(x);
 
-      // tau_2 - reach by staying in trip
-      auto const tau_2 = trip_reachable_[con.trip_];
+      // time_trip - reach by staying in trip
+      auto const time_trip = trip_reachable_[con.trip_];
 
-      // tau_3 - reach by transferring
+      // time_transfer - reach by transferring
       /*
       auto p_it = arrival_time_[con.from_station].end();
       while ((*p_it).first > con.departure_) {
@@ -151,19 +154,21 @@ struct csa_profile_search {
           arrival_time_[con.from_station_].end(), con.departure_,
           [&](auto const pair, time t) { return pair.first > t; });
 
-      auto const tau_3 = shift((*p_it).second);
+      auto const time_transfer = shift((*p_it).second);
 
-      auto const tau_c = cw_min(cw_min(tau_1, tau_2), tau_3);
+      auto const min_arrival_time =
+          cw_min(cw_min(time_walking, time_trip), time_transfer);
       auto const y_p = std::find_if(
           arrival_time_[con.to_station_].begin(),
           arrival_time_[con.to_station_].end(),
           [&](auto const pair) { return pair.first < con.arrival_; });
       auto const y = (*y_p).second;
-      assert(y.size() == tau_c.size());
-      auto const arrival_profile = cw_min(y, tau_c);
+      assert(y.size() == min_arrival_time.size());
+      auto const arrival_profile = cw_min(y, min_arrival_time);
 
-      if (y != tau_c && !is_dominated_in(std::make_pair(con.arrival_, tau_c),
-                                         arrival_time_[con.to_station_])) {
+      if (y != min_arrival_time &&
+          !is_dominated_in(std::make_pair(con.arrival_, min_arrival_time),
+                           arrival_time_[con.to_station_])) {
         for (auto fp : tt_.stations_[con.to_station_].footpaths_) {
           auto const departure_time = con.arrival_ + fp.duration_;
           auto const profile_pair =
@@ -171,12 +176,12 @@ struct csa_profile_search {
           add_to_profile(profile_pair, fp.to_station_);
         }
       }
-      trip_reachable_[con.trip_] = tau_c;
+      trip_reachable_[con.trip_] = min_arrival_time;
       stats_.connections_scanned_++;
     }
   }
 
-  arrival_times get_tau_1(const csa_connection& con) {
+  arrival_times get_time_walking(const csa_connection& con) {
     auto x = Dir == search_dir::FWD ? final_footpaths_[con.to_station_]
                                     : final_footpaths_[con.from_station_];
     if (x != INVALID) {
@@ -189,11 +194,11 @@ struct csa_profile_search {
     return array_maker<time, MAX_TRANSFERS + 1>::make_array(x);
   }
 
-  arrival_times get_tau_2(const csa_connection& con) {
+  arrival_times get_time_trip(const csa_connection& con) {
     return trip_reachable_[con.trip_];
   }
 
-  arrival_times get_tau_3(const csa_connection& con) {
+  arrival_times get_time_transfer(const csa_connection& con) {
     auto const station =
         Dir == search_dir::FWD ? con.to_station_ : con.from_station_;
     auto const timestamp =
@@ -201,7 +206,6 @@ struct csa_profile_search {
     auto p_it = std::lower_bound(
         arrival_time_[station].begin(), arrival_time_[station].end(), timestamp,
         [](auto const& pair, time t) {
-          // TODO(root) may be <= / >= instead of < / >
           return Dir == search_dir::FWD ? pair.first < t : pair.first > t;
         });
     return shift(p_it->second);
@@ -220,11 +224,9 @@ struct csa_profile_search {
       LOG(motis::logging::debug)
           << "[*] search interval (" << search_interval_.begin_ << ", "
           << search_interval_.end_ << ")";
-
       for (auto t : targets_) {
         LOG(motis::logging::debug) << "[*] target " << t;
       }
-
       for (auto my_station : tt_.stations_) {
         LOG(motis::logging::debug)
             << "[S]" << my_station.id_ << "_{"
@@ -246,8 +248,6 @@ struct csa_profile_search {
                                      << "\"duration\":" << fp.duration_ << "}";
         }
       }
-    }
-    if (DEBUG_OUTPUT) {
       for (auto con : connections) {
         LOG(motis::logging::debug)
             << "[C]{"
@@ -258,69 +258,53 @@ struct csa_profile_search {
             << "\"trip\":" << con.trip_ << "}";
       }
     }
-    int changes_in_s = 0;
 
-    auto first_connection = connections.end();
-    auto last_connection = connections.begin();
+    csa_connection const earliest_con{search_interval_.begin_};
+    auto const last_connection = connections.rbegin();
+    auto const first_connection = std::upper_bound(
+        connections.rbegin(), connections.rend(), earliest_con,
+        [&](auto const& a, auto const& b) {
+          return Dir == search_dir::FWD ? a.departure_ > b.departure_
+                                        : a.arrival_ < b.arrival_;
+        });
 
-    // TODO(root) BWD
-    // if (Dir == search_dir::FWD) {
-    csa_connection const end_at{search_interval_.begin_};
-    last_connection =
-        std::lower_bound(begin(connections), end(connections), end_at,
-                         [&](csa_connection const& a, csa_connection const& b) {
-                           return a.departure_ < b.departure_;
-                         });
-    if (last_connection == connections.end()) {
-      return;
-    }
-    // TODO(root) BWD
-    /*} else {
-      csa_connection const start_at{search_interval_.end_};
-      first_connection = std::lower_bound(
-          begin(connections), end(connections), start_at,
-          [&](csa_connection const& a, csa_connection const& b) {
-            return a.arrival_ > b.arrival_;
-          });
-      if (first_connection == connections.begin()) {
-        return;
-      }
-    }
-    */
-    for (auto it = first_connection; it-- != last_connection;) {
+    for (auto it = last_connection; it != first_connection; ++it) {
       auto const& con = *it;
 
       if (!is_trip_reachable_[con.trip_]) {
         continue;
       }
 
-      // tau's
-      auto const tau_1 = get_tau_1(con);
-      auto const tau_2 = get_tau_2(con);
-      auto const tau_3 = get_tau_3(con);
+      auto const time_walking = get_time_walking(con);
+      auto const time_trip = get_time_trip(con);
+      auto const time_transfer = get_time_transfer(con);
+      auto const min_arrival_time =
+          cw_min(time_walking, time_trip, time_transfer);
 
-      auto const tau_c = cw_min(cw_min(tau_1, tau_2), tau_3);
+      auto const curr_best_arrival_time =
+          std::lower_bound(
+              arrival_time_[Dir == search_dir::FWD ? con.from_station_
+                                                   : con.to_station_]
+                  .begin(),
+              arrival_time_[Dir == search_dir::FWD ? con.from_station_
+                                                   : con.to_station_]
+                  .end(),
+              Dir == search_dir::FWD ? con.departure_ : con.arrival_,
+              [](auto const& pair, time t) {
+                return Dir == search_dir::FWD ? pair.first < t : pair.first > t;
+              })
+              ->second;
 
-      // TODO(root) BWD
-      auto const y_p = std::find_if(
-          arrival_time_[con.from_station_].begin(),
-          arrival_time_[con.from_station_].end(),
-          [&](auto const pair) { return pair.first >= con.departure_; });
-      auto const y = y_p->second;
-
-      assert(y.size() == tau_c.size());
-
-      auto const arrival_profile = cw_min(y, tau_c);
-
-      // TODO(root) Limited Walking Optimization
-      if (y != tau_c && !is_dominated_in(std::make_pair(con.departure_, tau_c),
-                                         arrival_time_[con.from_station_])) {
+      if (curr_best_arrival_time != min_arrival_time &&
+          !is_dominated_in(std::make_pair(con.departure_, min_arrival_time),
+                           arrival_time_[con.from_station_])) {
+        auto const arrival_profile =
+            cw_min(curr_best_arrival_time, min_arrival_time);
         auto const& footpaths =
             Dir == search_dir::FWD
                 ? tt_.stations_[con.from_station_].incoming_footpaths_
                 : tt_.stations_[con.from_station_].footpaths_;
         for (auto const& fp : footpaths) {
-          // TODO(root) BWD
           auto const departure_time = Dir == search_dir::FWD
                                           ? con.departure_ - fp.duration_
                                           : con.arrival_ + fp.duration_;
@@ -331,21 +315,17 @@ struct csa_profile_search {
         }
       }
 
-      trip_reachable_[con.trip_] = tau_c;
+      trip_reachable_[con.trip_] = min_arrival_time;
       if (DEBUG_OUTPUT) {
-
-        std::string tau_c_string;
-        for (auto t : tau_c) {
-          tau_c_string += std::to_string(t);
-          tau_c_string += ", ";
+        std::string min_arrival_time_string;
+        for (auto t : min_arrival_time) {
+          min_arrival_time_string += std::to_string(t);
+          min_arrival_time_string += ", ";
         }
         LOG(motis::logging::debug)
-            << "[T]" << con.trip_ << "_(" << tau_c_string << ")";
+            << "[T]" << con.trip_ << "_(" << min_arrival_time_string << ")";
       }
       stats_.connections_scanned_++;
-    }
-    if (DEBUG_OUTPUT) {
-      LOG(motis::logging::debug) << changes_in_s;
     }
   }
 
@@ -367,41 +347,24 @@ struct csa_profile_search {
                        });
   }
 
-  // TODO(root) BWD
   void add_to_profile(const std::pair<time, arrival_times>& profile_pair,
                       const uint32_t station_id) {
-
+    /*
     if (starts_.find(station_id) == starts_.end()) {
       if (is_source_dominated(profile_pair)) {
         return;
       }
     }
+    */
+    auto& arrival_time = arrival_time_[station_id];
+    auto const insert_position =
+        std::lower_bound(arrival_time.begin(), arrival_time.end(), profile_pair,
+                         [](auto const& p1, auto const& p2) {
+                           return Dir == search_dir::FWD ? p1.first < p2.first
+                                                         : p1.first > p2.first;
+                         });
 
-    auto it = arrival_time_[station_id].begin();
-    if (Dir == search_dir::FWD) {
-      while (it->first < profile_pair.first) {
-        it++;
-      }
-    } else {
-      while (it->first > profile_pair.first) {
-        it++;
-      }
-    }
-
-    if (it->first == profile_pair.first && it->second == profile_pair.second) {
-      return;
-    }
-
-    if (std::any_of(it, arrival_time_[station_id].end(), [&](auto other_pair) {
-          return !dominates_profile(profile_pair, other_pair);
-        })) {
-      return;
-    }
-
-    // it = arrival_time_[station_id].insert(arrival_time_[station_id].begin(),
-    // profile_pair);
-    it = arrival_time_[station_id].emplace(arrival_time_[station_id].begin(),
-                                           profile_pair);
+    auto const inserted_at = arrival_time.insert(insert_position, profile_pair);
 
     if (DEBUG_OUTPUT) {
       std::string profile;
@@ -413,12 +376,13 @@ struct csa_profile_search {
           << "[P](" << profile_pair.first << ", (" << profile << "))_"
           << station_id << "_" << tt_.stations_[station_id].station_ptr_->name_;
     }
-
-    while (it != arrival_time_[station_id].begin()) {
-      if (dominates_profile((*it), profile_pair)) {
-        it = arrival_time_[station_id].erase(it);
+    for (auto it = std::make_reverse_iterator(inserted_at);
+         it != arrival_time.rend();) {
+      if (dominates_profile(profile_pair, *it)) {
+        it = std::make_reverse_iterator(
+            arrival_time.erase(std::next(it).base()));
       } else {
-        --it;
+        ++it;
       }
     }
   }
