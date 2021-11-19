@@ -46,36 +46,30 @@ struct csa_profile_reconstruction {
     return targets_.find(station.id_) != targets_.end();
   }
 
-  // TODO(root) BWD
-  // TODO(root) may be very inefficient.
-  //  In the worst case, the profile gets scanned two times
   std::pair<time, std::array<time, MAX_TRANSFERS + 1>>
   find_earliest_profile_pair(csa_station const& station, int transfers,
                              time const tau_s) {
     auto const& profile = arrival_time_[station.id_];
-    auto it = profile.begin();
-    for (; it != profile.end(); ++it) {
-      auto const& pair = *it;
+    auto fwd_it = profile.begin();
+    for (; fwd_it != profile.end(); ++fwd_it) {
+      auto const& pair = *fwd_it;
       if (pair.first >= tau_s) {
         break;
       }
     }
-    auto const& p = *it;
+    auto const& p = *fwd_it;
 
     auto const arrival_time = p.second[transfers];
-    it = profile.end();
-    for (; it-- != profile.begin();) {
-      auto const& q = *it;
+    auto bwd_it = profile.end();
+    for (; bwd_it-- != fwd_it;) {
+      auto const& q = *bwd_it;
       if (q.second[transfers] == arrival_time) {
         return q;
       }
     }
-
-    // return (INVALID, array_maker<time, MAX_TRANSFERS +
-    // 1>::make_array(INVALID));
-    return {};
+    return {INVALID, array_maker<time, MAX_TRANSFERS + 1>::make_array(INVALID)};
   }
-  // TODO(root) BWD
+
   void extract_journey(csa_journey& journey) {
     if (journey.is_reconstructed()) {
       return;
@@ -101,6 +95,8 @@ struct csa_profile_reconstruction {
       }
     }
     journey.destination_station_ = start;
+    // TODO(root): add final footpath if start is not a destination but a
+    //  station with a footpath to a destination
   }
 
   void add_journey_leg(csa_journey& journey, journey_pointer& jp) {
@@ -194,43 +190,9 @@ struct csa_profile_reconstruction {
     if (Dir == search_dir::FWD) {
       auto earliest_pair =
           find_earliest_profile_pair(station, transfers, tau_s);
-      for (auto const& fp : station.footpaths_) {
-        for (auto const& enter_con : get_enter_candidates(
-                 tt_.stations_[fp.to_station_],
-                 earliest_pair.first + fp.duration_, transfers)) {
-          auto const& trip_connections =
-              tt_.trip_to_connections_[enter_con->trip_];
-          auto const& first_connection =
-              std::find_if(trip_connections.begin(), trip_connections.end(),
-                           [enter_con](auto const& con) {
-                             return con->departure_ == enter_con->departure_;
-                           });
-          for (auto it = first_connection; it != trip_connections.end(); ++it) {
-            auto const& exit_con = *it;
-            auto const& arrival_station = tt_.stations_[exit_con->to_station_];
-            auto const& exit_pair = find_earliest_profile_pair(
-                arrival_station, transfers, exit_con->arrival_);
-            // Exit here if
-            // 1. The arrival time departing from the current stop (transfers -
-            // 1) matches the arrival time when taking the current trip OR
-            // 2. The connection ends at a target stop OR
-            // 3. The connection ends at a stop from which the target can be
-            // reached by foot
-            if ((transfers > 0 && earliest_pair.second[transfers] ==
-                                      exit_pair.second[transfers - 1]) ||
-                (is_destination(exit_con->to_station_))) {
-              return journey_pointer(enter_con, exit_con, &fp);
-            }
-          }
-        }
-      }
-      /*
-      // Otherwise, compute l_enter and l_exit
-      auto earliest_pair =
-          find_earliest_profile_pair(station, transfers, tau_s);
       std::unordered_map<csa_connection const*, footpath> candidates;
 
-      // TODO(root) auslagern zu get_enter_candidates?
+      // TODO(root) rewrite for get_enter_candidates?
       for (auto const& fp : station.footpaths_) {
         for (auto const& candidate :
              tt_.stations_[fp.to_station_].outgoing_connections_) {
@@ -256,16 +218,12 @@ struct csa_profile_reconstruction {
               arrival_station, transfers, exit_con->arrival_);
           if ((transfers != 0 &&
                earliest_pair.second[transfers] == e_p.second[transfers - 1]) ||
-              (std::find_if(targets_.begin(), targets_.end(),
-                            [&](auto const& station) {
-                              return station.id_ == arrival_station.id_;
-                            }) != targets_.end())) {
-              (is_destination(arrival_station))) {
-                auto const fp = candidate.second;
-                return journey_pointer(enter_con, exit_con, &fp);
-              }
+              final_footpaths_[arrival_station.id_] != INVALID) {
+            auto const fp = candidate.second;
+            return journey_pointer(enter_con, exit_con, &fp);
           }
-        }*/
+        }
+      }
     } else {
       auto earliest_pair =
           find_earliest_profile_pair(station, transfers, tau_s);
@@ -303,7 +261,7 @@ struct csa_profile_reconstruction {
     }
     return {};
   }
-
+  /*
   auto get_exit_candidates(csa_station const& arrival_station,
                            time arrival_time, int transfers) const {
     return utl::all(arrival_station.incoming_connections_)  //
@@ -315,8 +273,8 @@ struct csa_profile_reconstruction {
                           !con->to_out_allowed_;
                  })  //
            | utl::iterable();
-  }
-
+  }*/
+  /*
   auto get_enter_candidates(csa_station const& departure_station,
                             time departure_time, int transfers) const {
     return utl::all(departure_station.outgoing_connections_)  //
@@ -328,7 +286,7 @@ struct csa_profile_reconstruction {
                           !con->from_in_allowed_;
                  })  //
            | utl::iterable();
-  }
+  }*/
 
   csa_timetable const& tt_;
   ArrivalTimes const& arrival_time_;
