@@ -219,6 +219,10 @@ struct meat {
           station_profile.begin(), station_profile.end(),
           exit_con->arrival_ + MAX_DELAY,
           [&](time t, auto const& pair) { return pair.first > t; });
+      if (safe_pair->first == INVALID_TIME) {
+        continue;
+      }
+      bool found_exit = false;
       for (auto exit_pair = first_pair; exit_pair != std::next(safe_pair);
            ++exit_pair) {
         if (std::abs(exit_pair->second - current_pair.second) >= 1) {
@@ -227,8 +231,12 @@ struct meat {
           new_current_journey.transfers_ += 1;
           extract_journeys(s_, journeys, new_current_journey,
                            exit_con->to_station_, *exit_pair);
-          return;
+          found_exit = true;
+//          return;
         }
+      }
+      if (found_exit) {
+        return;
       }
     }
   }
