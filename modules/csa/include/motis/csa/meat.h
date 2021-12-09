@@ -232,7 +232,6 @@ struct meat {
           extract_journeys(s_, journeys, new_current_journey,
                            exit_con->to_station_, *exit_pair);
           found_exit = true;
-//          return;
         }
       }
       if (found_exit) {
